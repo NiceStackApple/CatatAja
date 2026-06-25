@@ -193,6 +193,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        setShowLoginModal(false); // Dismiss overlay instantly
         setAuthLoading(true);
         try {
           const cloudData = await fetchUserDataFromCloud(currentUser.uid);
@@ -553,7 +554,11 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
-      await loginWithGoogle();
+      const loggedInUser = await loginWithGoogle();
+      if (loggedInUser) {
+        setUser(loggedInUser);
+        setShowLoginModal(false);
+      }
     } catch (error) {
       alert("Gagal masuk dengan Google: " + error);
     }
