@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "UserWorkspace": {
+      "title": "User Workspace",
+      "description": "Entire synchronized workspace for a single user, containing their pages, habits, track records, databases, and activity logs.",
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "description": "Customized user pages including notes and tracker lists"
+        },
+        "habits": {
+          "type": "array",
+          "description": "User habits and metrics"
+        },
+        "trackingDays": {
+          "type": "array",
+          "description": "Habit completion records, mood, and daily reviews"
+        },
+        "databaseRows": {
+          "type": "array",
+          "description": "Notion-like structured database rows"
+        },
+        "activityRecaps": {
+          "type": "object",
+          "description": "Timelogs and sleep cycles indexed by date"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when this document was last saved"
+        }
+      },
+      "required": ["pages", "habits", "trackingDays", "databaseRows", "activityRecaps"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserWorkspace",
+      "description": "User specific private space document containing complete app state"
+    }
+  }
+}

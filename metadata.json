@@ -1,0 +1,6 @@
+{
+  "name": "Catat Aja",
+  "description": "A Notion-styled personal dashboard with block-based editing, a calendar for habit tracking, interactive progress charts, and customizable workspaces.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
