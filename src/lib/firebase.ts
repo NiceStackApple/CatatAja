@@ -15,12 +15,13 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBci3jguCLe5TTTHJnL9fS19T9TMoOD6zk",
-  authDomain: "celtic-web-32t1j.firebaseapp.com",
-  projectId: "celtic-web-32t1j",
-  storageBucket: "celtic-web-32t1j.firebasestorage.app",
-  messagingSenderId: "798583514715",
-  appId: "1:798583514715:web:fe3a4b2e0dd3d271da817e"
+  apiKey: "AIzaSyDXlQ071YvKt1A_M2npOmI7iWLp4_XB008",
+  authDomain: "catataja-83644.firebaseapp.com",
+  projectId: "catataja-83644",
+  storageBucket: "catataja-83644.firebasestorage.app",
+  messagingSenderId: "172667304765",
+  appId: "1:172667304765:web:aa93c1cbc5992c3bd5a354",
+  measurementId: "G-PLK11FDK4B"
 };
 
 // Initialize Firebase
@@ -30,8 +31,8 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Firestore with specific database ID
-export const db = getFirestore(app, "ai-studio-4d09eb14-20f0-42f3-8b3c-86cf9ebafdf7");
+// Initialize Firestore with default database
+export const db = getFirestore(app);
 
 // Firebase Auth sign-in with Google popup
 export const loginWithGoogle = async () => {
