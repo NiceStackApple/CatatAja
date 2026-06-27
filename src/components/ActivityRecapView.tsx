@@ -97,6 +97,24 @@ export const categoryWeights: Record<string, number> = {
 interface ActivityRecapViewProps {
   activityRecaps: Record<string, ActivityEntry[]>;
   onUpdateActivities: (date: string, activities: ActivityEntry[]) => void;
+  settings?: any;
+}
+
+export function formatTimeStr(timeStr: string, timeFormat: '12h' | '24h'): string {
+  if (!timeStr) return '--:--';
+  if (timeFormat === '24h' || !timeFormat) return timeStr;
+  
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  const hoursStr = hours < 10 ? `0${hours}` : hours;
+  return `${hoursStr}:${minutes} ${ampm}`;
 }
 
 // Math calculation helper for sleep duration
@@ -146,14 +164,18 @@ function parseTimeToDayjs(timeStr: string): dayjs.Dayjs | null {
   return dayjs().hour(hours).minute(minutes).second(0);
 }
 
-export default function ActivityRecapView({ activityRecaps, onUpdateActivities }: ActivityRecapViewProps) {
-  // We use "2026-06-22" as our initial baseline date matching mock data records
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-06-22');
+export default function ActivityRecapView({ activityRecaps, onUpdateActivities, settings }: ActivityRecapViewProps) {
+  const t = (idText: string, enText: string) => {
+    return settings?.language === 'id' ? idText : enText;
+  };
+
+  // We use the actual current date as our initial date
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => dayjs().format('YYYY-MM-DD'));
   
   // Calendar popover states
   const [showCalendarPopover, setShowCalendarPopover] = useState(false);
-  const [calMonth, setCalMonth] = useState(() => dayjs('2026-06-22').month());
-  const [calYear, setCalYear] = useState(() => dayjs('2026-06-22').year());
+  const [calMonth, setCalMonth] = useState(() => dayjs().month());
+  const [calYear, setCalYear] = useState(() => dayjs().year());
 
   const calendarCells = useMemo(() => {
     const startOfMonth = dayjs().year(calYear).month(calMonth).startOf('month');
@@ -635,8 +657,9 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
   const formattedSelectedDate = useMemo(() => {
     const d = new Date(selectedDateStr);
     const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' };
-    return d.toLocaleDateString('id-ID', options);
-  }, [selectedDateStr]);
+    const locale = settings?.language === 'en' ? 'en-US' : 'id-ID';
+    return d.toLocaleDateString(locale, options);
+  }, [selectedDateStr, settings?.language]);
 
   // Handle previous / next day buttons
   const navigateDay = (offset: number) => {
@@ -891,7 +914,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
               {formattedSelectedDate}
             </span>
             <span className="text-[10px] text-[#787774] uppercase font-semibold font-mono tracking-wider mt-0.5 group-hover:text-[#4F46E5]/80 transition-colors">
-              {selectedDateStr === '2026-06-22' ? 'Hari Ini (Baseline)' : selectedDateStr}
+              {selectedDateStr === dayjs().format('YYYY-MM-DD') ? t('Hari Ini', 'Today') : selectedDateStr}
             </span>
           </button>
 
@@ -965,7 +988,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
               <div className="grid grid-cols-7 gap-1">
                 {calendarCells.map((cell, idx) => {
                   const isSelected = cell.dateStr === selectedDateStr;
-                  const isToday = cell.dateStr === '2026-06-22'; // Baseline
+                  const isToday = cell.dateStr === dayjs().format('YYYY-MM-DD');
                   return (
                     <button
                       key={idx}
@@ -999,7 +1022,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                   }}
                   className="flex-1 text-[10px] font-bold py-1.5 bg-[#F1F1F0] hover:bg-[#EBEBEB] rounded text-[#37352F] transition-colors cursor-pointer"
                 >
-                  Baseline
+                  {t('Baseline (22 Jun)', 'Baseline (Jun 22)')}
                 </button>
                 <button
                   type="button"
@@ -1011,7 +1034,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                   }}
                   className="flex-1 text-[10px] font-bold py-1.5 bg-white border border-[#EBEBEB] hover:bg-[#F1F1F0] rounded text-[#37352F] transition-colors cursor-pointer"
                 >
-                  Hari Ini
+                  {t('Hari Ini', 'Today')}
                 </button>
               </div>
             </div>
@@ -1035,7 +1058,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-4 bg-[#10B981] rounded-xs" />
-              <h3 className="text-sm font-bold text-[#37352F] uppercase tracking-wider">Lini Masa Kegiatan (Timeline)</h3>
+              <h3 className="text-sm font-bold text-[#37352F] uppercase tracking-wider">{t('Lini Masa Kegiatan (Timeline)', 'Activity Timeline')}</h3>
             </div>
             
             <button
@@ -1043,7 +1066,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
               className="flex items-center gap-1 text-xs font-semibold bg-[#10B981] text-white px-3 py-1.5 rounded-md hover:bg-[#0D9668] transition-all shadow-xs cursor-pointer active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Tambah Kegiatan</span>
+              <span>{t('Tambah Kegiatan', 'Add Activity')}</span>
             </button>
           </div>
 
@@ -1089,9 +1112,9 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                           <span className="text-amber-700 font-bold uppercase tracking-wider text-[10px]">Did Not Sleep ☕</span>
                         ) : (
                           <>
-                            <span>{act.startTime ? act.startTime : '--:--'}</span>
+                            <span>{act.startTime ? formatTimeStr(act.startTime, settings?.timeFormat) : '--:--'}</span>
                             <span className="opacity-40">-</span>
-                            <span>{act.endTime ? act.endTime : '--:--'}</span>
+                            <span>{act.endTime ? formatTimeStr(act.endTime, settings?.timeFormat) : '--:--'}</span>
                           </>
                         )}
                       </div>
@@ -1115,7 +1138,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                       <button
                         onClick={() => openAddEditModal(act)}
                         className="p-1 hover:bg-[#F1F1F0] rounded text-[#37352F] transition-all"
-                        title="Edit Entri"
+                        title={t('Edit Entri', 'Edit Entry')}
                       >
                         <span className="text-[11px] font-semibold text-[#10B981] hover:underline">Edit</span>
                       </button>
@@ -1124,7 +1147,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                         <button
                           onClick={() => handleDeleteEntry(act.id)}
                           className="p-1 hover:bg-red-50 text-red-500 rounded transition-all"
-                          title="Hapus Entri"
+                          title={t('Hapus Entri', 'Delete Entry')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1208,7 +1231,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
               className="flex flex-wrap items-center gap-4 p-3.5 bg-[#F7F7F5] border border-[#EBEBEB] rounded-lg text-xs"
             >
               <div className="flex items-center gap-2">
-                <span className="font-bold text-[#787774]">Tanggal Mulai:</span>
+                <span className="font-bold text-[#787774]">{t('Tanggal Mulai:', 'Start Date:')}</span>
                 <input 
                   type="date" 
                   value={customStartDate} 
@@ -1217,7 +1240,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                 />
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-[#787774]">Tanggal Selesai:</span>
+                <span className="font-bold text-[#787774]">{t('Tanggal Selesai:', 'End Date:')}</span>
                 <input 
                   type="date" 
                   value={customEndDate} 
@@ -1412,17 +1435,17 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
               <div className="flex items-center gap-2.5">
                 <div className="w-1.5 h-5 bg-[#10B981] rounded-xs" />
                 <div>
-                  <h4 className="text-sm font-bold text-[#37352F] uppercase tracking-wider">Reference Matrix & Skor Produktivitas</h4>
-                  <p className="text-xs text-[#787774] mt-0.5">Metrik pembobotan aktivitas terstandarisasi untuk mengukur efektivitas harian.</p>
+                  <h4 className="text-sm font-bold text-[#37352F] uppercase tracking-wider">Reference Matrix & Productivity Score</h4>
+                  <p className="text-xs text-[#787774] mt-0.5">Standardized activity weighting metrics to measure daily effectiveness.</p>
                 </div>
               </div>
               
               {/* Score summary badge */}
               <div className="flex items-center gap-3 bg-[#E7F3EF] border border-[#10B981]/25 p-3 rounded-xl shrink-0">
                 <div>
-                  <div className="text-[10px] text-[#0D7A5E] font-bold uppercase tracking-wider leading-none">Rerata Skor Harian</div>
+                  <div className="text-[10px] text-[#0D7A5E] font-bold uppercase tracking-wider leading-none">Daily Average Score</div>
                   <div className="text-lg font-black text-[#0D7A5E] font-mono mt-0.5 leading-none">
-                    {avgDailyWeightedScore} <span className="text-xs font-normal">poin/hari</span>
+                    {avgDailyWeightedScore} <span className="text-xs font-normal">pts/day</span>
                   </div>
                 </div>
               </div>
@@ -1432,7 +1455,7 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5 p-4.5 bg-[#F7F7F5] border border-[#EBEBEB] rounded-xl text-xs">
               <div className="md:col-span-5 flex flex-col justify-between space-y-2">
                 <div>
-                  <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Status Produktivitas</span>
+                  <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">{t('Status Produktivitas', 'Productivity Status')}</span>
                   <div className="text-sm font-bold text-[#37352F] mt-1 flex items-center gap-2">
                     {avgDailyWeightedScore >= 25 ? (
                       <>
@@ -1801,14 +1824,14 @@ export default function ActivityRecapView({ activityRecaps, onUpdateActivities }
                     onClick={() => setIsModalOpen(false)}
                     className="text-xs font-semibold text-[#787774] bg-[#F1F1F0] hover:bg-[#EBEBEB] px-4 py-2 rounded-lg transition-colors cursor-pointer"
                   >
-                    Batal
+                    {t('Batal', 'Cancel')}
                   </button>
                   <button
                     type="submit"
                     className="text-xs font-semibold bg-[#10B981] hover:bg-[#0D9668] text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    <span>Simpan Catatan</span>
+                    <span>{t('Simpan Catatan', 'Save Log')}</span>
                   </button>
                 </div>
 

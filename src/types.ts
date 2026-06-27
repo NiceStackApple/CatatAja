@@ -89,3 +89,8 @@ export interface ActivityEntry {
   didNotSleep?: boolean;
 }
 
+export interface AppSettings {
+  language: 'en' | 'id';
+  profileName?: string;
+}
+

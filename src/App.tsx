@@ -58,8 +58,11 @@ import AnalyticsCharts from './components/AnalyticsCharts';
 import DatabaseView from './components/DatabaseView';
 import PageIcon from './components/PageIcon';
 import ActivityRecapView from './components/ActivityRecapView';
+import LiveDateTimeBanner from './components/LiveDateTimeBanner';
 import Logo from './components/Logo';
 import { TiptapEditor } from './components/TiptapEditor';
+import SettingsModal from './components/SettingsModal';
+import i18n from './i18n';
 
 // Hardcoded state fallback
 import { 
@@ -69,9 +72,9 @@ import {
   INITIAL_DATABASE_ROWS 
 } from './mockData';
 
-import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry } from './types';
+import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry, AppSettings } from './types';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth, loginWithGoogle, logoutUser, saveUserDataToCloud, fetchUserDataFromCloud } from './lib/firebase';
+import { auth, loginWithGoogle, logoutUser, saveUserDataToCloud, fetchUserDataFromCloud, updateUserProfileName } from './lib/firebase';
 
 export default function App() {
   const journalTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
@@ -188,6 +191,38 @@ export default function App() {
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [isKeepEditorOpen, setIsKeepEditorOpen] = useState(false);
 
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = localStorage.getItem('nt_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          language: parsed.language === 'id' ? 'id' : 'en',
+          profileName: parsed.profileName || ''
+        };
+      } catch (e) {
+        // ignore
+      }
+    }
+    return {
+      language: 'en',
+      profileName: ''
+    };
+  });
+
+  // Ensure no stale dark mode is left on root
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+  }, []);
+
+  // Persist settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('nt_settings', JSON.stringify(settings));
+    // Update i18n language
+    i18n.changeLanguage(settings.language);
+  }, [settings]);
+
   // --- FIREBASE AUTH LISTENER & INITIAL CLOUD SYNC ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -196,14 +231,18 @@ export default function App() {
         setShowLoginModal(false); // Dismiss overlay instantly
         setAuthLoading(true);
         try {
-          const cloudData = await fetchUserDataFromCloud(currentUser.uid);
-          if (cloudData) {
+          const res = await fetchUserDataFromCloud(currentUser.uid);
+          if (res && res.isOffline) {
+            console.warn("Running in offline mode. Continuing with local data backup.");
+          } else if (res && res.exists && res.data) {
+            const cloudData = res.data;
             if (cloudData.pages) setPages(cloudData.pages);
             if (cloudData.habits) setHabits(cloudData.habits);
             if (cloudData.trackingDays) setTrackingDays(cloudData.trackingDays);
             if (cloudData.databaseRows) setDatabaseRows(cloudData.databaseRows);
             if (cloudData.activityRecaps) setActivityRecaps(cloudData.activityRecaps);
-          } else {
+            if (cloudData.settings) setSettings(cloudData.settings);
+          } else if (res && !res.exists && !res.isOffline) {
             // First time cloud user - start with fresh, completely empty default structures
             const cleanPages: Page[] = [
               { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
@@ -220,7 +259,8 @@ export default function App() {
               habits: INITIAL_HABITS,
               trackingDays: [],
               databaseRows: [],
-              activityRecaps: {}
+              activityRecaps: {},
+              settings: settings
             });
 
             setPages(cleanPages);
@@ -230,7 +270,16 @@ export default function App() {
             setActivityRecaps({});
           }
         } catch (error) {
-          console.error("Error setting up user session data:", error);
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const isOffline = errMsg.toLowerCase().includes('offline') || 
+                            errMsg.toLowerCase().includes('network') || 
+                            errMsg.toLowerCase().includes('failed-precondition') ||
+                            errMsg.toLowerCase().includes('unavailable');
+          if (isOffline) {
+            console.warn("Failed to set up user session data due to offline state. Continuing with local data.");
+          } else {
+            console.error("Error setting up user session data:", error);
+          }
         } finally {
           setIsDataLoadedFromCloud(true);
           setAuthLoading(false);
@@ -255,12 +304,13 @@ export default function App() {
           habits,
           trackingDays,
           databaseRows,
-          activityRecaps
+          activityRecaps,
+          settings
         });
       }, 1200);
       return () => clearTimeout(delayDebounce);
     }
-  }, [pages, habits, trackingDays, databaseRows, activityRecaps, user, isDataLoadedFromCloud]);
+  }, [pages, habits, trackingDays, databaseRows, activityRecaps, settings, user, isDataLoadedFromCloud]);
 
   // --- LOCAL STORAGE BACKUP EFFECTS ---
   useEffect(() => {
@@ -290,15 +340,23 @@ export default function App() {
   // Active page lookup helper
   const currentPage = pages.find(p => p.id === currentPageId) || pages[0] || INITIAL_PAGES[0];
 
+  const getTodayDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Today representation info
-  const todayDateString = '2026-06-22'; // Fixed current local time date anchor matching mock records.
+  const todayDateString = getTodayDateString();
   const todayTrackingData = trackingDays.find(d => d.date === todayDateString) || {
     date: todayDateString,
     habitsCompleted: [],
     mood: 'good',
     productiveHours: 5,
     notes: '',
-    journalTitle: 'Senin Fokus Tracker'
+    journalTitle: settings.language === 'id' ? 'Catatan Fokus Hari Ini' : "Today's Focus Log"
   } as TrackingDay;
 
   // --- COMPONENT HANDLERS ---
@@ -381,6 +439,84 @@ export default function App() {
     return processedLines.join('');
   };
 
+  // --- APP SETTINGS ACTIONS & DATA PORTABILITY ---
+  const handleUpdateProfileName = async (name: string) => {
+    try {
+      await updateUserProfileName(name);
+      if (user) {
+        setUser({ ...user, displayName: name });
+      }
+    } catch (err) {
+      console.error("Error updating profile display name:", err);
+    }
+  };
+
+  const handleImportData = (data: {
+    pages: Page[];
+    habits: Habit[];
+    trackingDays: TrackingDay[];
+    databaseRows: DatabaseRow[];
+    activityRecaps: Record<string, ActivityEntry[]>;
+    settings?: AppSettings;
+  }) => {
+    if (data.pages) setPages(data.pages);
+    if (data.habits) setHabits(data.habits);
+    if (data.trackingDays) setTrackingDays(data.trackingDays);
+    if (data.databaseRows) setDatabaseRows(data.databaseRows);
+    if (data.activityRecaps) setActivityRecaps(data.activityRecaps);
+    if (data.settings) setSettings(data.settings);
+
+    if (data.pages) localStorage.setItem('nt_pages', JSON.stringify(data.pages));
+    if (data.habits) localStorage.setItem('nt_habits', JSON.stringify(data.habits));
+    if (data.trackingDays) localStorage.setItem('nt_tracking_days', JSON.stringify(data.trackingDays));
+    if (data.databaseRows) localStorage.setItem('nt_database_rows', JSON.stringify(data.databaseRows));
+    if (data.activityRecaps) localStorage.setItem('nt_activity_recaps', JSON.stringify(data.activityRecaps));
+    if (data.settings) localStorage.setItem('nt_settings', JSON.stringify(data.settings));
+  };
+
+  const handleResetAllData = async () => {
+    localStorage.removeItem('nt_pages');
+    localStorage.removeItem('nt_habits');
+    localStorage.removeItem('nt_tracking_days');
+    localStorage.removeItem('nt_database_rows');
+    localStorage.removeItem('nt_activity_recaps');
+    localStorage.removeItem('nt_settings');
+
+    const cleanPages: Page[] = [
+      { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
+      { id: 'pg-2', title: 'Workspace Tracking Calendar', icon: '📅', cover: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)', type: 'calendar', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
+      { id: 'pg-3', title: 'Productivity Analytics', icon: '📊', cover: 'linear-gradient(135deg, #fd1d1d 0%, #fcb045 100%)', type: 'analytics', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
+      { id: 'pg-4', title: 'Papan Kerja Projek (Kanban)', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
+      { id: 'pg-5', title: 'Catatan & Ide Kreatif', icon: '📝', cover: 'linear-gradient(135deg, #f1a7a1 0%, #f7dbbd 100%)', type: 'notes', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
+      { id: 'pg-6', title: 'Dashboard Kustom (Blank Canvas)', icon: '✨', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'blank', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
+      { id: 'pg-recap', title: 'Daily Activity Recap', icon: '⏳', cover: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', type: 'recap', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] }
+    ];
+
+    setPages(cleanPages);
+    setHabits(INITIAL_HABITS);
+    setTrackingDays([]);
+    setDatabaseRows([]);
+    setActivityRecaps({});
+    setSettings({
+      language: 'en',
+      profileName: ''
+    });
+
+    if (user) {
+      await saveUserDataToCloud(user.uid, {
+        pages: cleanPages,
+        habits: INITIAL_HABITS,
+        trackingDays: [],
+        databaseRows: [],
+        activityRecaps: {},
+        settings: {
+          language: 'en',
+          profileName: ''
+        }
+      });
+    }
+  };
+
   // Copy notes to clipboard with user visual indicator
   const handleTriggerCopyToClipboard = () => {
     if (todayTrackingData.notes) {
@@ -433,13 +569,13 @@ export default function App() {
   const handleCreateNewPage = (type: PageType) => {
     const newPageId = `pg-${Date.now()}`;
     const titles: Record<PageType, string> = {
-      tracker: 'Daftar Habit Harian Baru',
-      calendar: 'Kalender Pelacakan Baru',
-      analytics: 'Analisis Statistik Baru',
-      database: 'Database Projek Baru',
-      notes: 'Catatan Kosong Baru',
-      blank: 'Dashboard Kanvas Kustom',
-      recap: 'Daily Activity Recap Baru'
+      tracker: 'New Daily Habits Tracker',
+      calendar: 'New Tracking Calendar',
+      analytics: 'New Analytics Statistics',
+      database: 'New Project Database',
+      notes: 'New Blank Notes',
+      blank: 'Custom Canvas Dashboard',
+      recap: 'New Daily Activity Recap'
     };
 
     const icons: Record<PageType, string> = {
@@ -487,7 +623,7 @@ export default function App() {
   const handleDeletePage = (id: string) => {
     const remains = pages.filter(p => p.id !== id);
     if (remains.length === 0) {
-      alert('Tidak dapat menghapus seluruh halaman. Harus ada minimal satu halaman terdaftar.');
+      alert('Cannot delete all pages. There must be at least one page registered.');
       return;
     }
     setPages(remains);
@@ -520,17 +656,17 @@ export default function App() {
       name: newHabitName,
       icon: newHabitIcon,
       color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-      frequency: 'Harian'
+      frequency: 'Daily'
     };
 
     setHabits([...habits, newHabit]);
     setNewHabitName('');
-    alert(`Kebiasaan "${newHabitName}" berhasil ditambahkan ke daftar templat pelacak!`);
+    alert(`Habit "${newHabitName}" successfully added to the tracker templates!`);
   };
 
   const handleDeleteHabitTemplate = (id: string, e?: React.MouseEvent) => {
     if (habits.length <= 1) {
-      alert('Minimal harus menyisakan satu kebiasaan aktif untuk pelacakan.');
+      alert('Must leave at least one active habit for tracking.');
       return;
     }
     const targetHabit = habits.find(h => h.id === id);
@@ -548,7 +684,7 @@ export default function App() {
     try {
       await logoutUser();
     } catch (error) {
-      alert("Gagal keluar akun: " + error);
+      alert("Failed to sign out: " + error);
     }
   };
 
@@ -560,8 +696,12 @@ export default function App() {
         setShowLoginModal(false);
       }
     } catch (error) {
-      alert("Gagal masuk dengan Google: " + error);
+      alert("Failed to login with Google: " + error);
     }
+  };
+
+  const t = (idText: string, enText: string) => {
+    return settings.language === 'id' ? idText : enText;
   };
 
   return (
@@ -579,6 +719,8 @@ export default function App() {
         setIsCollapsed={setSidebarCollapsed}
         user={user}
         onLogout={handleLogout}
+        settings={settings}
+        onOpenSettings={() => setShowSettingsModal(true)}
       />
 
       {/* Main Notion Canvas viewport */}
@@ -696,7 +838,7 @@ export default function App() {
                       ? 'bg-white text-amber-500 shadow-sm border border-[#EBEBEB]' 
                       : 'text-[#37352F]/60 hover:bg-white hover:text-[#37352F]'
                   }`}
-                  title="Tambah ke Favorit"
+                  title={currentPage.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
                 >
                   <Star className="w-3.5 h-3.5 fill-current" />
                 </button>
@@ -704,7 +846,7 @@ export default function App() {
                   id="btn-header-config-habits"
                   onClick={() => setShowConfigModal(true)}
                   className="p-1.5 text-[#37352F]/60 hover:text-[#37352F] hover:bg-white rounded transition-all"
-                  title="Kelola Templat Kebiasaan"
+                  title="Manage Habit Templates"
                 >
                   <Settings className="w-3.5 h-3.5" />
                 </button>
@@ -713,7 +855,7 @@ export default function App() {
 
             {/* Breadcrumbs / Page information block */}
             <div className="flex items-center gap-1.5 text-xs text-[#787774] font-sans">
-              <span>Ruang Tsaqif</span>
+              <span>{settings?.profileName ? `Ruang ${settings.profileName.split(' ')[0]}` : user?.displayName ? `Ruang ${user.displayName.split(' ')[0]}` : 'Ruang Tsaqif'}</span>
               <span className="opacity-30">/</span>
               <span className="font-medium bg-[#F1F1F1] text-[#37352F] px-2 py-0.5 rounded-sm border border-[#EBEBEB] uppercase text-[10px] tracking-wider">
                 {currentPage.type} View
@@ -728,6 +870,12 @@ export default function App() {
             {currentPage.type === 'tracker' && (
               /* DOKUMEN: DAILY HABIT CHECKER PAGE VIEW (Indonesian styled tracker) */
               <div className="space-y-6">
+                <LiveDateTimeBanner 
+                  settings={settings} 
+                  habits={habits} 
+                  todayTrackingData={todayTrackingData} 
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   
                   {/* Left Column: Habits Checked checklist for today */}
@@ -784,7 +932,7 @@ export default function App() {
                       <div className="flex items-center gap-2 mb-2">
                         <FileText className="w-4 h-4 text-[#337EA9]" />
                         <h2 className="text-xs font-bold text-[#37352F] uppercase tracking-widest">
-                          Catatan Harian
+                          Daily Journal Notes
                         </h2>
                       </div>
 
@@ -811,7 +959,7 @@ export default function App() {
                           />
                         ) : (
                           <p className="text-xs text-[#787774] italic font-sans leading-relaxed">
-                            Ambil catatan...
+                            Take a note...
                           </p>
                         )}
                       </div>
@@ -843,7 +991,7 @@ export default function App() {
                                   type="text"
                                   value={todayTrackingData.journalTitle || ''}
                                   onChange={(e) => handleUpdateTrackingDay({ ...todayTrackingData, journalTitle: e.target.value })}
-                                  placeholder="Judul"
+                                  placeholder="Title"
                                   className="w-full text-base font-bold text-neutral-800 placeholder-neutral-400 bg-transparent border-0 outline-hidden focus:ring-0 px-1 py-1"
                                 />
                                 <button
@@ -852,7 +1000,7 @@ export default function App() {
                                     // Pinned visual feedback
                                   }}
                                   className="p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors cursor-pointer"
-                                  title="Sematkan catatan"
+                                  title="Pin note"
                                 >
                                   <Pin className="w-4 h-4" />
                                 </button>
@@ -863,7 +1011,7 @@ export default function App() {
                                 <TiptapEditor
                                   value={todayTrackingData.notes || ''}
                                   onChange={(html) => handleUpdateTrackingDay({ ...todayTrackingData, notes: html })}
-                                  placeholder="Catatan..."
+                                  placeholder="Notes..."
                                 />
                               </div>
 
@@ -871,7 +1019,7 @@ export default function App() {
                               <div className="border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] text-neutral-400 select-none">
-                                    Diedit {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    Edited {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -880,7 +1028,7 @@ export default function App() {
                                     onClick={() => setIsKeepEditorOpen(false)}
                                     className="px-4 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs rounded-md transition-all cursor-pointer"
                                   >
-                                    Tutup
+                                    Close
                                   </button>
                                 </div>
                               </div>
@@ -896,17 +1044,17 @@ export default function App() {
                     {/* Today Mood Card */}
                     <div className="bg-white border border-[#EBEBEB] rounded-lg p-4 space-y-3.5">
                       <div>
-                        <h3 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">Aura Mood Hari Ini</h3>
-                        <p className="text-[11px] text-[#787774] mt-0.5">Bagaimana perasaan Anda secara keseluruhan?</p>
+                        <h3 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">Today's Mood Aura</h3>
+                        <p className="text-[11px] text-[#787774] mt-0.5">How do you feel overall?</p>
                       </div>
 
                       <div className="flex flex-col gap-1.5">
                         {[
-                          { value: 'great', icon: '😊', bg: 'bg-[#E7F3EF] text-[#0D7A5E] border-[#E7F3EF]', label: 'Luar Biasa / Fokus' },
-                          { value: 'good', icon: '🙂', bg: 'bg-indigo-50 text-indigo-800 border-indigo-100', label: 'Sangat Baik / Nyaman' },
-                          { value: 'neutral', icon: '😐', bg: 'bg-[#F1F1F1] text-[#37352F] border-[#EBEBEB]', label: 'Biasa Saja / Seimbang' },
-                          { value: 'tired', icon: '🥱', bg: 'bg-[#FDECC8] text-[#CB912F] border-[#FDECC8]', label: 'Kelelahan / Kurang Tidur' },
-                          { value: 'bad', icon: '☹️', bg: 'bg-[#FBEEEE] text-[#EB5757] border-[#FBEEEE]', label: 'Kurang Sehat / Drop' }
+                          { value: 'great', icon: '😊', bg: 'bg-[#E7F3EF] text-[#0D7A5E] border-[#E7F3EF]', label: 'Excellent / Focused' },
+                          { value: 'good', icon: '🙂', bg: 'bg-indigo-50 text-indigo-800 border-indigo-100', label: 'Very Good / Cozy' },
+                          { value: 'neutral', icon: '😐', bg: 'bg-[#F1F1F1] text-[#37352F] border-[#EBEBEB]', label: 'Neutral / Balanced' },
+                          { value: 'tired', icon: '🥱', bg: 'bg-[#FDECC8] text-[#CB912F] border-[#FDECC8]', label: 'Tired / Sleep Deprived' },
+                          { value: 'bad', icon: '☹️', bg: 'bg-[#FBEEEE] text-[#EB5757] border-[#FBEEEE]', label: 'Unwell / Feeling Down' }
                         ].map((moodItem) => {
                           const isSelected = todayTrackingData.mood === moodItem.value;
 
@@ -932,12 +1080,12 @@ export default function App() {
                     {/* Productive Hours Slider */}
                     <div className="bg-white border border-[#EBEBEB] rounded-lg p-4 space-y-3">
                       <div className="flex justify-between items-center">
-                        <h4 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">Durasi Fokus</h4>
+                        <h4 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">Focus Duration</h4>
                         <span className="text-[11px] font-bold font-mono text-[#337EA9] bg-[#F1F1F1] border border-[#EBEBEB] px-1.5 py-0.5 rounded">
-                          {todayTrackingData.productiveHours} Jam
+                          {todayTrackingData.productiveHours} Hours
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#787774] leading-tight">Ukur jam fokus yang dicapai hari ini:</p>
+                      <p className="text-[11px] text-[#787774] leading-tight">Measure focus hours achieved today:</p>
 
                       <input
                         id="today-hours-slider"
@@ -951,17 +1099,17 @@ export default function App() {
                       />
 
                       <div className="flex justify-between text-[9px] text-[#787774] font-mono">
-                        <span>Santai (0j)</span>
-                        <span>Sangat Intens (12j)</span>
+                        <span>Relaxed (0h)</span>
+                        <span>Very Intense (12h)</span>
                       </div>
                     </div>
 
                     {/* Streak Summary */}
                     <div className="p-3.5 rounded-lg border border-[#EBEBEB] bg-[#F7F7F5] flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <span className="text-[9px] font-bold text-[#448361] uppercase block tracking-wider">Info Ringkasan</span>
-                        <p className="text-xs font-bold text-[#37352F]">Checklist Berjalan Lancar</p>
-                        <span className="text-[10px] text-[#787774]">Terbuka 14 Hari Tanpa Terputus!</span>
+                        <span className="text-[9px] font-bold text-[#448361] uppercase block tracking-wider">Summary Info</span>
+                        <p className="text-xs font-bold text-[#37352F]">Checklist Running Smoothly</p>
+                        <span className="text-[10px] text-[#787774]">14 Days Open Without Interruption!</span>
                       </div>
                       <div className="text-2xl shrink-0">🚀</div>
                     </div>
@@ -978,6 +1126,7 @@ export default function App() {
                 habits={habits}
                 trackingDays={trackingDays}
                 onUpdateDay={handleUpdateTrackingDay}
+                settings={settings}
               />
             )}
 
@@ -994,6 +1143,7 @@ export default function App() {
               <DatabaseView
                 rows={databaseRows}
                 onUpdateRows={setDatabaseRows}
+                settings={settings}
               />
             )}
 
@@ -1001,6 +1151,7 @@ export default function App() {
               <ActivityRecapView
                 activityRecaps={activityRecaps}
                 onUpdateActivities={handleUpdateActivitiesForDate}
+                settings={settings}
               />
             )}
 
@@ -1042,8 +1193,8 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <span className="text-xl">⚙️</span>
                   <div>
-                    <h3 className="text-base font-bold text-neutral-800 font-display leading-none">Konfigurasi Templat Kebiasaan</h3>
-                    <span className="text-[11px] text-notion-gray">Daftar global kebiasaan yang akan dilacak pada kalender harian</span>
+                    <h3 className="text-base font-bold text-neutral-800 font-display leading-none">Habits Template Configuration</h3>
+                    <span className="text-[11px] text-notion-gray">Global list of habits to track on your daily calendar</span>
                   </div>
                 </div>
                 <button
@@ -1051,7 +1202,7 @@ export default function App() {
                   onClick={() => setShowConfigModal(false)}
                   className="p-1 px-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-semibold rounded-lg transition-all"
                 >
-                  Tutup
+                  Close
                 </button>
               </div>
 
@@ -1059,7 +1210,7 @@ export default function App() {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider block">
-                    Templat Aktif ({habits.length})
+                    Active Templates ({habits.length})
                   </label>
                   
                   <div className="border border-neutral-200 rounded-xl divide-y divide-neutral-150 overflow-hidden text-xs bg-neutral-50/50">
@@ -1081,7 +1232,7 @@ export default function App() {
                           id={`btn-config-delete-habit-${h.id}`}
                           onClick={(e) => handleDeleteHabitTemplate(h.id, e)}
                           className="p-1 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-all"
-                          title="Hapus Habit Templat (Tahan Shift untuk langsung menghapus)"
+                          title="Delete Habit Template (Hold Shift to delete instantly)"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -1093,7 +1244,7 @@ export default function App() {
                 {/* Form to add a new habit to the roster */}
                 <div className="bg-slate-50/80 border border-slate-200/70 p-4 rounded-xl space-y-3.5">
                   <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block">
-                    + Tambah Templat Kebiasaan Baru
+                    + Add New Habit Template
                   </span>
                   
                   <div className="flex gap-2">
@@ -1113,7 +1264,7 @@ export default function App() {
                     <input
                       id="config-input-habit-name"
                       type="text"
-                      placeholder="Nama kebiasaan baru (contoh: Jalan Kaki 10m)..."
+                      placeholder="New habit name (e.g., walk 10m)..."
                       value={newHabitName}
                       onChange={(e) => setNewHabitName(e.target.value)}
                       className="flex-1 text-xs px-3 py-2 border border-neutral-250 bg-white rounded-lg outline-hidden text-neutral-700 placeholder-neutral-400"
@@ -1125,7 +1276,7 @@ export default function App() {
                     onClick={handleAddNewHabitTemplate}
                     className="w-full text-center py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer"
                   >
-                    Simpan Templat Kebiasaan
+                    Save Habit Template
                   </button>
                 </div>
               </div>
@@ -1133,7 +1284,7 @@ export default function App() {
               <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg text-[10.5px] leading-tight text-indigo-900 flex items-start gap-2">
                 <Info className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
                 <span>
-                  Menambahkan atau menghapus templat di sini akan memperbarui daftar isian centang pada tracker hari ini dan hari selanjutnya, tanpa menghapus jejak sejarah tanggal kemarin.
+                  Adding or deleting templates here will update the checkboxes on today's and subsequent trackers, without deleting yesterday's historical logs.
                 </span>
               </div>
             </motion.div>
@@ -1156,12 +1307,12 @@ export default function App() {
                   <Trash2 className="w-5 h-5" />
                 </span>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-[13px] text-[#37352F]">Hapus Templat Kebiasaan?</h3>
+                  <h3 className="font-bold text-[13px] text-[#37352F]">{t('Hapus Templat Kebiasaan?', 'Delete Habit Template?')}</h3>
                   <p className="text-[#787774] leading-normal">
-                    Apakah Anda yakin ingin menghapus kebiasaan <strong className="text-[#37352F]">"{deleteConfirmHabitName}"</strong>? Data catatan hari kemarin akan tetap tersimpan di dalam riwayat kalender Anda.
+                    {t('Apakah Anda yakin ingin menghapus kebiasaan', 'Are you sure you want to delete the habit')} <strong className="text-[#37352F]">"{deleteConfirmHabitName}"</strong>? {t('Data catatan hari kemarin akan tetap tersimpan di dalam riwayat kalender Anda.', 'Yesterday\'s records will remain saved in your calendar history.')}
                   </p>
                   <div className="text-[10px] text-emerald-800 bg-emerald-50/50 p-1.5 rounded border border-emerald-100 flex items-center gap-1.5 mt-1 font-medium select-none">
-                    <span>💡 Tip:</span> Tahan tombol <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> saat klik ikon Hapus untuk menghapus langsung tanpa konfirmasi ini.
+                    <span>💡 Tip:</span> {t('Tahan tombol', 'Hold')} <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> {t('saat klik ikon Hapus untuk menghapus langsung tanpa konfirmasi ini.', 'when clicking Delete to delete instantly without this confirmation.')}
                   </div>
                 </div>
               </div>
@@ -1171,7 +1322,7 @@ export default function App() {
                   onClick={() => setDeleteConfirmHabitId(null)}
                   className="px-3.5 py-1.5 rounded border border-[#EBEBEB] text-[#37352F] hover:bg-[#F7F7F5] cursor-pointer transition-colors"
                 >
-                  Batal
+                  {t('Batal', 'Cancel')}
                 </button>
                 <button
                   type="button"
@@ -1181,7 +1332,7 @@ export default function App() {
                   }}
                   className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white cursor-pointer transition-colors"
                 >
-                  Hapus Templat
+                  {t('Hapus Templat', 'Delete Template')}
                 </button>
               </div>
             </motion.div>
@@ -1501,6 +1652,22 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        settings={settings}
+        onUpdateSettings={setSettings}
+        user={user}
+        onUpdateProfileName={handleUpdateProfileName}
+        pages={pages}
+        habits={habits}
+        trackingDays={trackingDays}
+        databaseRows={databaseRows}
+        activityRecaps={activityRecaps}
+        onImportData={handleImportData}
+        onResetAllData={handleResetAllData}
+      />
 
     </div>
   );

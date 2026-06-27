@@ -5,10 +5,13 @@ import {
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
-  User
+  User,
+  updateProfile
 } from 'firebase/auth';
 import { 
-  getFirestore, 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc, 
   setDoc, 
   getDoc 
@@ -31,8 +34,12 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Initialize Firestore with default database
-export const db = getFirestore(app);
+// Initialize Firestore with persistent cache to support offline mode out-of-the-box
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager()
+  })
+});
 
 // Firebase Auth sign-in with Google popup
 export const loginWithGoogle = async () => {
@@ -102,7 +109,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Save user data to Firestore
+// Save user data to Firestore with offline check
 export const saveUserDataToCloud = async (userId: string, data: any) => {
   const path = `users/${userId}`;
   try {
@@ -112,22 +119,48 @@ export const saveUserDataToCloud = async (userId: string, data: any) => {
       updatedAt: new Date().toISOString()
     }, { merge: true });
     console.log("Cloud sync successful");
-  } catch (error) {
+  } catch (error: any) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const isOffline = errMsg.toLowerCase().includes('offline') || 
+                      errMsg.toLowerCase().includes('network') || 
+                      errMsg.toLowerCase().includes('failed-precondition') ||
+                      errMsg.toLowerCase().includes('unavailable');
+    if (isOffline) {
+      console.warn("Could not sync to cloud (offline):", errMsg);
+      return;
+    }
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 };
 
-// Fetch user data from Firestore
+// Fetch user data from Firestore with offline resilience
 export const fetchUserDataFromCloud = async (userId: string) => {
   const path = `users/${userId}`;
   try {
     const userDocRef = doc(db, 'users', userId);
     const userDocSnap = await getDoc(userDocRef);
     if (userDocSnap.exists()) {
-      return userDocSnap.data();
+      return { exists: true, data: userDocSnap.data() };
     }
-    return null;
-  } catch (error) {
+    return { exists: false, data: null };
+  } catch (error: any) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const isOffline = errMsg.toLowerCase().includes('offline') || 
+                      errMsg.toLowerCase().includes('network') || 
+                      errMsg.toLowerCase().includes('failed-precondition') ||
+                      errMsg.toLowerCase().includes('unavailable');
+    if (isOffline) {
+      console.warn("Firestore is offline, running with local data:", errMsg);
+      return { exists: false, data: null, isOffline: true };
+    }
     handleFirestoreError(error, OperationType.GET, path);
   }
 };
+
+// Update profile displayName in Firebase Auth
+export const updateUserProfileName = async (name: string) => {
+  if (auth.currentUser) {
+    await updateProfile(auth.currentUser, { displayName: name });
+  }
+};
+

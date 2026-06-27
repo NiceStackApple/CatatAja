@@ -19,27 +19,35 @@ interface HabitCalendarProps {
   habits: Habit[];
   trackingDays: TrackingDay[];
   onUpdateDay: (day: TrackingDay) => void;
+  settings?: any;
 }
 
 const MOODS = [
-  { value: 'great', label: 'Luar Biasa', emoji: '😊', color: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800' },
-  { value: 'good', label: 'Baik', emoji: '🙂', color: 'bg-blue-100 hover:bg-blue-200 text-blue-800' },
-  { value: 'neutral', label: 'Biasa Saja', emoji: '😐', color: 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800' },
-  { value: 'tired', label: 'Lelah', emoji: '🥱', color: 'bg-amber-100 hover:bg-amber-200 text-amber-800' },
-  { value: 'bad', label: 'Buruk', emoji: '☹️', color: 'bg-rose-100 hover:bg-rose-200 text-rose-800' },
+  { value: 'great', label: 'Luar Biasa', enLabel: 'Great', emoji: '😊', color: 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800' },
+  { value: 'good', label: 'Baik', enLabel: 'Good', emoji: '🙂', color: 'bg-blue-100 hover:bg-blue-200 text-blue-800' },
+  { value: 'neutral', label: 'Biasa Saja', enLabel: 'Neutral', emoji: '😐', color: 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800' },
+  { value: 'tired', label: 'Lelah', enLabel: 'Tired', emoji: '🥱', color: 'bg-amber-100 hover:bg-amber-200 text-amber-800' },
+  { value: 'bad', label: 'Buruk', enLabel: 'Bad', emoji: '☹️', color: 'bg-rose-100 hover:bg-rose-200 text-rose-800' },
 ];
 
-export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: HabitCalendarProps) {
+export default function HabitCalendar({ habits, trackingDays, onUpdateDay, settings }: HabitCalendarProps) {
   // Center on June 2026 (matching mockData)
   const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 22)); // June 22, 2026
   const [selectedDayString, setSelectedDayString] = useState<string | null>(null);
 
+  const t = (idText: string, enText: string) => {
+    return settings?.language === 'id' ? idText : enText;
+  };
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed (June = 5)
 
-  const monthNames = [
+  const monthNames = settings?.language === 'id' ? [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ] : [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
   // Calendar dates generation
@@ -124,8 +132,8 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">Penyelesaian Beruntun</span>
-            <p className="text-xl font-bold text-[#37352F]">14 Hari Terbuka</p>
+            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">{t('Penyelesaian Beruntun', 'Streak Completion')}</span>
+            <p className="text-xl font-bold text-[#37352F]">{t('14 Hari Terbuka', '14 Days Streak')}</p>
           </div>
           <div className="w-9 h-9 rounded bg-[#FBEEEE] text-[#EB5757] flex items-center justify-center">
             <Flame className="w-4 h-4 fill-current" />
@@ -134,8 +142,8 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
 
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">Sempurna (100% Habit)</span>
-            <p className="text-xl font-bold text-[#37352F]">{completedAllHabitsCount} Hari Tercatat</p>
+            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">{t('Sempurna (100% Habit)', 'Perfect (100% Habit)')}</span>
+            <p className="text-xl font-bold text-[#37352F]">{completedAllHabitsCount} {t('Hari Tercatat', 'Days Logged')}</p>
           </div>
           <div className="w-9 h-9 rounded bg-[#E7F3EF] text-[#0D7A5E] flex items-center justify-center">
             <CheckCircle2 className="w-4 h-4" />
@@ -144,8 +152,8 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
 
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">Rata-Rata Produktif</span>
-            <p className="text-xl font-bold text-[#37352F] font-mono">5.8 Jam/Hari</p>
+            <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">{t('Rata-Rata Produktif', 'Average Productivity')}</span>
+            <p className="text-xl font-bold text-[#37352F] font-mono">5.8 {t('Jam/Hari', 'Hours/Day')}</p>
           </div>
           <div className="w-9 h-9 rounded bg-indigo-50 text-indigo-700 flex items-center justify-center">
             <Zap className="w-4 h-4" />
@@ -166,7 +174,7 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                 {monthNames[month]} {year}
               </h3>
               <span className="text-[10px] sm:text-[11px] text-[#787774] block mt-1 leading-tight">
-                Klik pada tanggal untuk melihat/mengedit catatan saku
+                {t('Klik pada tanggal untuk melihat/mengedit catatan saku', 'Click on a date to view/edit pocket logs')}
               </span>
             </div>
           </div>
@@ -184,7 +192,7 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
               onClick={() => setCurrentDate(new Date(2026, 5, 22))}
               className="px-2 py-0.5 rounded bg-white text-[10px] sm:text-[11px] font-semibold text-[#37352F] shadow-xs hover:bg-[#F7F7F5] border border-[#EBEBEB] cursor-pointer"
             >
-              Hari Ini
+              {t('Hari Ini', 'Today')}
             </button>
             <button
               id="btn-calendar-next"
@@ -198,13 +206,13 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
 
         {/* Days of week labels */}
         <div className="grid grid-cols-7 border-b border-[#EBEBEB] bg-[#F7F7F5] text-center text-[11px] font-medium text-[#787774] py-1.5">
-          <span>Sen</span>
-          <span>Sel</span>
-          <span>Rab</span>
-          <span>Kam</span>
-          <span>Jum</span>
-          <span>Sab</span>
-          <span>Min</span>
+          <span>{t('Sen', 'Mon')}</span>
+          <span>{t('Sel', 'Tue')}</span>
+          <span>{t('Rab', 'Wed')}</span>
+          <span>{t('Kam', 'Thu')}</span>
+          <span>{t('Jum', 'Fri')}</span>
+          <span>{t('Sab', 'Sat')}</span>
+          <span>{t('Min', 'Sun')}</span>
         </div>
 
         {/* Calendar cell grid */}
@@ -348,7 +356,7 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                   onClick={() => setSelectedDayString(null)}
                   className="p-1 px-2.5 bg-neutral-200/80 hover:bg-neutral-200 text-neutral-700 text-xs rounded-lg flex items-center gap-1 transition-all"
                 >
-                  <X className="w-3.5 h-3.5" /> Tutup
+                  <X className="w-3.5 h-3.5" /> {t('Tutup', 'Close')}
                 </button>
               </div>
 
@@ -359,20 +367,20 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                   <input
                     id="peek-journal-title"
                     type="text"
-                    value={selectedDayData?.journalTitle || 'Rangkuman Harian'}
+                    value={selectedDayData?.journalTitle || t('Rangkuman Harian', 'Daily Summary')}
                     onChange={(e) => handleUpdatePeekingDay({ journalTitle: e.target.value })}
-                    placeholder="Judul jurnal harian..."
+                    placeholder={t('Judul jurnal harian...', 'Daily journal title...')}
                     className="w-full text-xl font-bold text-neutral-800 bg-transparent border-none outline-hidden font-display mb-1"
                   />
                   <p className="text-xs text-notion-gray font-mono">
-                    Tanggal: <span className="underline">{selectedDayString}</span>
+                    {t('Tanggal:', 'Date:')} <span className="underline">{selectedDayString}</span>
                   </p>
                 </div>
 
                 {/* Mood Selection Row */}
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block">
-                    Kondisi Mood Hari Ini
+                    {t('Kondisi Mood Hari Ini', "Today's Mood")}
                   </label>
                   <div className="flex flex-wrap gap-1.5">
                     {MOODS.map(m => {
@@ -389,7 +397,7 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                           }`}
                         >
                           <span>{m.emoji}</span>
-                          <span>{m.label}</span>
+                          <span>{t(m.label, m.enLabel)}</span>
                         </button>
                       );
                     })}
@@ -400,10 +408,10 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                 <div className="space-y-2 bg-slate-50 p-3 rounded-lg border border-neutral-100">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                      Jam Kerja Produktif
+                      {t('Jam Kerja Produktif', 'Productive Working Hours')}
                     </label>
                     <span className="text-xs font-bold font-mono text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
-                      {selectedDayData?.productiveHours || 0} Jam
+                      {selectedDayData?.productiveHours || 0} {t('Jam', 'Hours')}
                     </span>
                   </div>
                   <input
@@ -417,15 +425,15 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                     className="w-full accent-sky-600 cursor-pointer h-1.5 bg-neutral-200 rounded-lg appearance-none"
                   />
                   <div className="flex justify-between text-[10px] text-notion-gray font-mono">
-                    <span>Sangat Santai (0j)</span>
-                    <span>Intens (12j)</span>
+                    <span>{t('Sangat Santai (0j)', 'Relaxed (0h)')}</span>
+                    <span>{t('Intens (12j)', 'Intense (12h)')}</span>
                   </div>
                 </div>
 
                 {/* Habits tracking Checklist */}
                 <div className="space-y-2.5">
                   <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block">
-                    Daftar Kebiasaan (Habits Checklist)
+                    {t('Daftar Kebiasaan (Habits Checklist)', 'Habits Checklist')}
                   </label>
                   <div className="border border-neutral-200 rounded-xl divide-y divide-neutral-150 overflow-hidden shadow-2xs">
                     {habits.map(h => {
@@ -460,13 +468,13 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                 {/* Free Text Jurnal Block */}
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider block">
-                    Tulisan Jurnal Harian
+                    {t('Tulisan Jurnal Harian', 'Daily Journal Notes')}
                   </label>
                   <textarea
                     id="peek-textarea-notes"
                     value={selectedDayData?.notes || ''}
                     onChange={(e) => handleUpdatePeekingDay({ notes: e.target.value })}
-                    placeholder="Tuliskan evaluasi harian, kejadian berharga, atau refleksi diri di sini..."
+                    placeholder={t('Tuliskan evaluasi harian, kejadian berharga, atau refleksi diri di sini...', 'Write down daily evaluations, memorable events, or self-reflections here...')}
                     rows={4}
                     className="w-full p-3 text-sm text-neutral-700 bg-white border border-neutral-200 rounded-xl shadow-2xs focus:ring-1 focus:ring-sky-500"
                   />
@@ -480,7 +488,7 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay }: Hab
                   onClick={() => setSelectedDayString(null)}
                   className="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold font-display shadow-md transition-all text-center flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Check className="w-4 h-4" /> Simpan & Selesaikan Saku
+                  <Check className="w-4 h-4" /> {t('Simpan & Selesaikan Saku', 'Save & Complete Pocket Log')}
                 </button>
               </div>
             </motion.div>

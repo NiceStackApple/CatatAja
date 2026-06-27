@@ -236,38 +236,38 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
       {/* Metric Highlight Deck */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5">
-          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Kepatuhan Habit</span>
+          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Habit Adherence</span>
           <div className="flex items-baseline gap-1.5 mt-1">
             <span className="text-xl font-bold text-[#37352F]">{consistencyScore}%</span>
             <span className="text-[10px] text-[#0D7A5E] font-medium font-mono">↑ 4.2%</span>
           </div>
-          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Melacak keteraturan pencatatan</p>
+          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Tracking recording regularity</p>
         </div>
 
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5">
-          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Total Log Harian</span>
+          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Total Daily Logs</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-xl font-bold text-[#37352F]">{trackingDays.length} Hari</span>
-            <span className="text-[10px] text-[#0D7A5E] font-medium font-mono">Aktif</span>
+            <span className="text-xl font-bold text-[#37352F]">{trackingDays.length} Days</span>
+            <span className="text-[10px] text-[#0D7A5E] font-medium font-mono">Active</span>
           </div>
-          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Database sejarah terisi</p>
+          <p className="text-[10px] text-[#787774] mt-1 leading-tight">History database populated</p>
         </div>
 
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5">
-          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Rerata Mood</span>
+          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Average Mood</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-xl font-bold text-[#37352F]">Baik</span>
+            <span className="text-xl font-bold text-[#37352F]">Good</span>
             <span className="text-sm">🙂</span>
           </div>
-          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Kondisi dominan 8 hari terakhir</p>
+          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Dominant condition of the last 8 days</p>
         </div>
 
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5">
-          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Pilar Konsistensi</span>
+          <span className="text-[10px] font-bold text-[#787774] uppercase tracking-wider block">Consistency Pillars</span>
           <div className="flex items-baseline gap-1.5 mt-1">
-            <span className="text-xl font-bold text-[#37352F]">5/5 Habit</span>
+            <span className="text-xl font-bold text-[#37352F]">5/5 Habits</span>
           </div>
-          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Konfigurasi habit harian</p>
+          <p className="text-[10px] text-[#787774] mt-1 leading-tight">Daily habits configuration</p>
         </div>
       </div>
 
@@ -279,15 +279,15 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div className="mb-4">
             <div className="flex items-center gap-2">
               <div className="w-1 h-3 bg-[#337EA9] rounded-xs" />
-              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Grafik Jam Kerja Produktif</h4>
+              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Productive Hours Line Chart</h4>
             </div>
-            <p className="text-[11px] text-[#787774] mt-0.5">Tren durasi jam kerja fokus harian (10 catatan terakhir)</p>
+            <p className="text-[11px] text-[#787774] mt-0.5">Daily focus hours duration trend (last 10 records)</p>
           </div>
 
           <div className="relative w-full h-[220px] border border-[#EBEBEB] rounded-lg bg-[#F7F7F5]/40 p-2">
             {chronologicalDays.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-[#787774] italic">
-                Cari & buat data saku kalender untuk memulai visualisasi grafik.
+                Search & create calendar pocket data to start chart visualization.
               </div>
             ) : (
               <EChart options={productiveHoursOption as any} className="h-full w-full" />
@@ -297,7 +297,7 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div className="mt-2.5 p-2.5 rounded border border-[#EBEBEB] bg-[#F7F7F5] flex items-start gap-2">
             <Info className="w-3.5 h-3.5 text-[#337EA9] mt-0.5 shrink-0" />
             <span className="text-[10px] text-[#787774] leading-tight">
-              Arahkan kursor tetikus Anda pada garis grafik di atas untuk melihat catatan ringkasan produktivitas harian Anda secara bertahap dengan rincian interaktif.
+              Hover your cursor over the chart line above to see your daily productivity summary step-by-step with interactive details.
             </span>
           </div>
         </div>
@@ -307,9 +307,9 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div>
             <div className="flex items-center gap-2">
               <div className="w-1 h-3 bg-[#448361] rounded-xs" />
-              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Tingkat Pencapaian Setiap Kebiasaan</h4>
+              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Each Habit Completion Rate</h4>
             </div>
-            <p className="text-[11px] text-[#787774] mt-0.5">Persentase keberhasilan setiap pilar habit harian Anda</p>
+            <p className="text-[11px] text-[#787774] mt-0.5">Success percentage of each of your daily habit pillars</p>
           </div>
 
           <div className="relative w-full h-[220px] my-2">
@@ -319,7 +319,7 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div className="p-2.5 bg-[#E7F3EF] border border-[#EDEDED] text-[#0D7A5E] rounded text-[10px] leading-tight flex items-center gap-2">
             <Award className="w-4 h-4 text-[#448361] shrink-0" />
             <p className="font-medium text-[#0D7A5E]">
-              Kebiasaan dengan tingkat penyelesaian tertinggi adalah <span className="font-bold">Minum Air Putih (3L)</span> di angka 100%! Pertahankan performa luar biasa ini.
+              The habit with the highest completion rate is <span className="font-bold">Drinking Water (3L)</span> at 100%! Keep up this excellent performance.
             </p>
           </div>
         </div>
@@ -329,9 +329,9 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div>
             <div className="flex items-center gap-2">
               <div className="w-1 h-3 bg-[#D9730D] rounded-xs" />
-              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Komposisi Mood Harian</h4>
+              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Daily Mood Composition</h4>
             </div>
-            <p className="text-[11px] text-[#787774] mt-0.5">Sebaran kondisi emosional Anda selama periode pencatatan</p>
+            <p className="text-[11px] text-[#787774] mt-0.5">Distribution of your emotional state during the recording period</p>
           </div>
 
           <div className="relative w-full h-[220px] my-2">
@@ -339,7 +339,7 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           </div>
 
           <div className="text-[10px] text-[#787774] bg-[#F7F7F5] border border-[#EBEBEB] rounded p-2.5">
-            Mood didominasi emosional positif (sebesar <span className="font-bold text-[#37352F]">{(moodPercentages.great + moodPercentages.good)}%</span> dari seluruh pencatatan harian).
+            Mood is dominated by positive emotions (at <span className="font-bold text-[#37352F]">{(moodPercentages.great + moodPercentages.good)}%</span> of all daily recordings).
           </div>
         </div>
 
@@ -348,31 +348,31 @@ export default function AnalyticsCharts({ habits, trackingDays }: AnalyticsChart
           <div>
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-[#D9730D]" />
-              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Asisten Pelatih Kebiasaan</h4>
+              <h4 className="text-xs font-bold text-[#37352F] uppercase tracking-wider">Habit Coach Assistant</h4>
             </div>
-            <p className="text-[11px] text-[#787774] mt-0.5">Rekomendasi taktis berbasis pencatatan data riwayat Anda</p>
+            <p className="text-[11px] text-[#787774] mt-0.5">Tactical recommendations based on your historical data log</p>
           </div>
 
           <div className="space-y-3 bg-[#F7F7F5] p-3.5 rounded border border-[#EBEBEB] my-4 text-xs text-[#37352F] leading-normal">
             <div className="flex gap-2 items-start">
               <div className="bg-amber-100 text-[#CB912F] w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0 font-bold text-[9px] mt-0.5">1</div>
               <div>
-                <span className="font-bold block text-[#37352F]">Ukur jam tidur malam</span>
-                Tulisan jurnal Anda mendeteksi bahwa kurang tidur pada tgl 11 Juni berdampak signifikan terhadap penurunan durasi jam kerja fokus Anda menjadi 4 jam saja. Prioritaskan tidur berkualitas.
+                <span className="font-bold block text-[#37352F]">Measure night sleep hours</span>
+                Your journal notes detect that sleep deprivation on June 11 had a significant impact on reducing your focus hours to just 4 hours. Prioritize quality sleep.
               </div>
             </div>
             
             <div className="flex gap-2 items-start">
               <div className="bg-emerald-100 text-[#0D7A5E] w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0 font-bold text-[9px] mt-0.5">2</div>
               <div>
-                <span className="font-bold block text-[#37352F]">Tingkatkan Meditasi</span>
-                Meditasi paling sering mengantar pada mood "Sempurna/Great". Menambah intensitas meditasi harian akan meregenerasi kestabilan fokus kognitif Anda.
+                <span className="font-bold block text-[#37352F]">Increase Meditation</span>
+                Meditation most often leads to "Perfect/Great" mood. Increasing daily meditation intensity will regenerate your cognitive focus stability.
               </div>
             </div>
           </div>
 
           <div className="text-right text-[10px] text-[#787774] italic">
-            Dihasilkan secara instan berdasarkan algoritma data runtun waktu.
+            Instantly generated based on a time-series data algorithm.
           </div>
         </div>
 

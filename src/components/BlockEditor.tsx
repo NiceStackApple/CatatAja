@@ -193,45 +193,51 @@ export default function BlockEditor({
 
   const getPlaceholderFor = (type: Block['type']): string => {
     switch (type) {
-      case 'h1': return 'Judul Utama Baru';
-      case 'h2': return 'Sub-Judul Baru';
-      case 'h3': return 'Sub-judul Kecil';
-      case 'todo': return 'Tulis tugas harian...';
-      case 'bullet': return 'Poin diskusi...';
-      case 'callout': return 'Catatan informasi penting atau tips produktivitas harian.';
-      case 'quote': return 'Tulis kutipan yang menginspirasimu hari ini...';
+      case 'h1': return 'New Main Title';
+      case 'h2': return 'New Sub-Heading';
+      case 'h3': return 'New Small Heading';
+      case 'todo': return 'Write daily task...';
+      case 'bullet': return 'Discussion point...';
+      case 'callout': return 'Important information note or daily productivity tips.';
+      case 'quote': return 'Write an inspiring quote today...';
       case 'divider': return '';
-      case 'table': return 'Tabel Kustom Baru';
-      case 'chart': return 'Indikator Grafik Baru';
-      case 'bridge': return 'Jembatan Informasi';
-      default: return 'Ketik teks di sini...';
+      case 'table': return 'New Custom Table';
+      case 'chart': return 'New Chart Indicator';
+      case 'bridge': return 'Information Bridge';
+      default: return 'Type text here...';
     }
   };
 
   // Dynamic counter metrics from other pages
   const getBridgedPageStats = (pageId: string) => {
     const target = pages.find(p => p.id === pageId);
-    if (!target) return { label: 'Halaman Tidak Ditemukan', value: '', desc: 'Hubungkan dengan halaman lain.' };
+    if (!target) return { label: 'Page Not Found', value: '', desc: 'Connect with another page.' };
 
     switch (target.type) {
       case 'tracker': {
-        const todayStr = '2026-06-22';
+        const todayStr = (() => {
+          const d = new Date();
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        })();
         const todayData = trackingDays.find(d => d.date === todayStr) || { habitsCompleted: [] };
         const total = habits.length || 1;
         const current = todayData.habitsCompleted.length;
         const percent = Math.round((current / total) * 100);
         return {
-          label: 'Kemajuan Habit Hari Ini',
+          label: 'Habit Progress Today',
           value: `${percent}%`,
-          desc: `Menyelesaikan ${current} dari ${total} target kebiasaan harian.`
+          desc: `Completed ${current} out of ${total} daily habit targets.`
         };
       }
       case 'calendar': {
         const totalTracked = trackingDays.length;
         return {
-          label: 'Total Riwayat Log',
-          value: `${totalTracked} Hari`,
-          desc: 'Jumlah hari yang didokumentasikan di kalender.'
+          label: 'Total Log History',
+          value: `${totalTracked} Days`,
+          desc: 'Number of days documented on the calendar.'
         };
       }
       case 'analytics': {
@@ -239,38 +245,38 @@ export default function BlockEditor({
           ? (trackingDays.reduce((sum, d) => sum + (d.productiveHours || 0), 0) / trackingDays.length).toFixed(1)
           : '0';
         return {
-          label: 'Rata-rata Fokus Harian',
-          value: `${avgFocus} Jam`,
-          desc: 'Rata-rata durasi jam kerja produktif.'
+          label: 'Average Daily Focus',
+          value: `${avgFocus} Hours`,
+          desc: 'Average duration of productive working hours.'
         };
       }
       case 'database': {
         const totalTasks = databaseRows.length;
         const pending = databaseRows.filter(r => r.status !== 'Completed').length;
         return {
-          label: 'Tugas Belum Selesai',
-          value: `${pending} Tugas`,
-          desc: `Menyimpan total ${totalTasks} tugas pada papan database.`
+          label: 'Pending Tasks',
+          value: `${pending} Tasks`,
+          desc: `Stores a total of ${totalTasks} tasks on the database board.`
         };
       }
       case 'notes': {
         const totalBlocks = target.blocks?.length || 0;
         return {
-          label: 'Jumlah Blok Catatan',
-          value: `${totalBlocks} Blok`,
-          desc: 'Pemikiran kreatif & ide penting.'
+          label: 'Number of Note Blocks',
+          value: `${totalBlocks} Blocks`,
+          desc: 'Creative thoughts & important ideas.'
         };
       }
       case 'blank': {
         const totalBlocks = target.blocks?.length || 0;
         return {
-          label: 'Blok Elemen Terpasang',
-          value: `${totalBlocks} Elemen`,
-          desc: 'Komponen kustom yang dirancang di halaman kosong.'
+          label: 'Installed Element Blocks',
+          value: `${totalBlocks} Elements`,
+          desc: 'Custom components designed on a blank page.'
         };
       }
       default:
-        return { label: 'Brosur Informasi', value: 'Terhubung', desc: 'Halaman ini telah sukses ditautkan.' };
+        return { label: 'Information Brochure', value: 'Connected', desc: 'This page has been successfully linked.' };
     }
   };
 
@@ -334,7 +340,7 @@ export default function BlockEditor({
                     id={`btn-block-add-menu-${block.id}`}
                     onClick={() => setActiveMenuBlockId(activeMenuBlockId === block.id ? null : block.id)}
                     className="block-menu-trigger p-1 rounded text-[#787774] hover:text-[#37352F] hover:bg-[#EDEDED] cursor-pointer"
-                    title="Tambah Blok Setelah Ini"
+                    title="Add Block After This"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -491,12 +497,12 @@ export default function BlockEditor({
                           value={block.content}
                           onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
                           className="font-bold text-xs text-neutral-700 bg-transparent border-none outline-hidden focus:bg-[#EBEBEB] px-1 rounded-sm w-fit"
-                          placeholder="Nama Tabel..."
+                          placeholder="Table Name..."
                         />
                         <button
                           onClick={() => setSettingsBlockId(isSettingsOpen ? null : block.id)}
                           className={`p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-150 transition-colors ml-auto ${isSettingsOpen ? 'bg-neutral-100 text-neutral-700' : ''}`}
-                          title="Pengaturan Tabel"
+                          title="Table Settings"
                         >
                           <Settings className="w-3.5 h-3.5" />
                         </button>
@@ -543,7 +549,7 @@ export default function BlockEditor({
                                           handleBlockChange(block.id, { tableData: { headers, rows } });
                                         }}
                                         className="text-red-400 hover:text-red-600 font-bold text-xs pointer-events-auto shrink-0 leading-none ml-1 opacity-0 group-hover/th:opacity-100 transition-opacity"
-                                        title="Hapus Kolom"
+                                        title="Delete Column"
                                       >
                                         ×
                                       </button>
@@ -558,7 +564,7 @@ export default function BlockEditor({
                             {block.tableData.rows.length === 0 ? (
                               <tr>
                                 <td colSpan={block.tableData.headers.length + 1} className="p-3 text-center text-neutral-400 italic text-[11px]">
-                                  Tabel kosong, tekan tombol "Tambah Baris" di bawah!
+                                  Empty table, click "Add Row" below!
                                 </td>
                               </tr>
                             ) : (
@@ -589,7 +595,7 @@ export default function BlockEditor({
                                         });
                                       }}
                                       className="text-neutral-400 hover:text-red-500 font-bold opacity-0 group-hover/row:opacity-100 transition-opacity"
-                                      title="Hapus Baris"
+                                      title="Delete Row"
                                     >
                                       ×
                                     </button>
@@ -618,18 +624,18 @@ export default function BlockEditor({
                           }}
                           className="py-1 px-3 text-[10.5px] border border-dashed border-neutral-200 hover:border-blue-400 font-bold text-neutral-500 hover:text-blue-600 rounded-lg transition flex items-center gap-1 cursor-pointer w-fit"
                         >
-                          + Tambah Baris
+                          + Add Row
                         </button>
                         <button
                           onClick={() => {
-                            const newColName = `Kolom ${block.tableData!.headers.length + 1}`;
+                            const newColName = `Column ${block.tableData!.headers.length + 1}`;
                             const headers = [...block.tableData!.headers, newColName];
                             const rows = block.tableData!.rows.map(r => ({ ...r, [newColName]: '-' }));
                             handleBlockChange(block.id, { tableData: { headers, rows } });
                           }}
                           className="py-1 px-3 text-[10.5px] border border-dashed border-neutral-200 hover:border-purple-400 font-bold text-neutral-500 hover:text-purple-600 rounded-lg transition flex items-center gap-1 cursor-pointer w-fit"
                         >
-                          + Kolom Baru
+                          + New Column
                         </button>
                       </div>
                     </div>
@@ -647,12 +653,12 @@ export default function BlockEditor({
                           value={block.content}
                           onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
                           className="font-bold text-xs text-neutral-700 bg-transparent border-none outline-hidden focus:bg-[#EBEBEB] px-1 rounded-sm w-fit"
-                          placeholder="Nama Grafik..."
+                          placeholder="Chart Name..."
                         />
                         <button
                           onClick={() => setSettingsBlockId(isSettingsOpen ? null : block.id)}
                           className={`p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-150 ml-auto transition-colors ${isSettingsOpen ? 'bg-neutral-100 text-neutral-700' : ''}`}
-                          title="Pengaturan Grafik"
+                          title="Chart Settings"
                         >
                           <Settings className="w-3.5 h-3.5" />
                         </button>
@@ -721,12 +727,12 @@ export default function BlockEditor({
                           value={block.content}
                           onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
                           className="font-bold text-xs text-neutral-700 bg-transparent border-none outline-hidden focus:bg-[#EBEBEB] px-1 rounded-sm w-fit"
-                          placeholder="Judul Jembatan..."
+                          placeholder="Bridge Title..."
                         />
                         <button
                           onClick={() => setSettingsBlockId(isSettingsOpen ? null : block.id)}
                           className={`p-1 rounded text-neutral-400 hover:text-neutral-700 hover:bg-neutral-150 ml-auto transition-colors ${isSettingsOpen ? 'bg-neutral-100 text-neutral-700' : ''}`}
-                          title="Pengaturan Jembatan"
+                          title="Bridge Settings"
                         >
                           <Settings className="w-3.5 h-3.5" />
                         </button>
@@ -737,7 +743,7 @@ export default function BlockEditor({
                         if (!targetPage) {
                           return (
                             <div className="p-3 bg-rose-50 border border-rose-100 rounded-lg text-xs text-rose-600 flex items-center justify-between">
-                              <span>Jembatan belum dikonfigurasi. Silakan klik tombol gerigi untuk menyambungkan halaman target.</span>
+                              <span>Bridge not configured. Click the gear icon to connect the target page.</span>
                               <ChevronRight className="w-4 h-4 shrink-0 animate-pulse" />
                             </div>
                           );
@@ -969,7 +975,7 @@ export default function BlockEditor({
                             onClick={() => setSettingsBlockId(null)}
                             className="bg-neutral-800 hover:bg-neutral-900 text-white font-extrabold text-[10px] px-3.5 py-1 rounded"
                           >
-                            Tutup Panel
+                            Close Panel
                           </button>
                         </div>
                       </motion.div>
@@ -990,7 +996,7 @@ export default function BlockEditor({
                       }
                     }}
                     className="p-1 rounded text-[#787774] hover:text-[#EB5757] hover:bg-[#FBEEEE] cursor-pointer"
-                    title="Hapus Blok (Tahan Shift untuk langsung menghapus)"
+                    title="Delete Block (Hold Shift to delete instantly)"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -1091,10 +1097,10 @@ export default function BlockEditor({
           id="btn-block-add-bottom"
           onClick={() => addBlock('paragraph')}
           className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#787774] hover:text-[#37352F] hover:bg-[#F7F7F5] bg-white rounded-lg border border-[#EBEBEB] cursor-pointer transition-colors shadow-2xs"
-          title="Tambah Paragraf Baru"
+          title="Add New Paragraph"
         >
           <Plus className="w-4 h-4 text-neutral-500" />
-          <span>Tambah Blok Baru</span>
+          <span>Add New Block</span>
         </button>
       </div>
 
@@ -1113,12 +1119,12 @@ export default function BlockEditor({
                   <Trash2 className="w-5 h-5" />
                 </span>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-[13px] text-[#37352F]">Hapus Blok Konten?</h3>
+                  <h3 className="font-bold text-[13px] text-[#37352F]">Delete Content Block?</h3>
                   <p className="text-[#787774] leading-normal">
-                    Apakah Anda yakin ingin menghapus blok <strong className="text-[#37352F] uppercase">"{deleteConfirmBlockType}"</strong> ini dari halaman?
+                    Are you sure you want to delete this <strong className="text-[#37352F] uppercase">"{deleteConfirmBlockType}"</strong> block from the page?
                   </p>
                   <div className="text-[10px] text-emerald-800 bg-emerald-50/50 p-1.5 rounded border border-emerald-100 flex items-center gap-1.5 mt-1 font-medium select-none">
-                    <span>💡 Tip:</span> Tahan tombol <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> saat klik ikon Hapus untuk menghapus langsung tanpa konfirmasi ini.
+                    <span>💡 Tip:</span> Hold the <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> key when clicking Delete to delete instantly without this confirmation.
                   </div>
                 </div>
               </div>
@@ -1128,7 +1134,7 @@ export default function BlockEditor({
                   onClick={() => setDeleteConfirmBlockId(null)}
                   className="px-3.5 py-1.5 rounded border border-[#EBEBEB] text-[#37352F] hover:bg-[#F7F7F5] cursor-pointer transition-colors"
                 >
-                  Batal
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -1138,7 +1144,7 @@ export default function BlockEditor({
                   }}
                   className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white cursor-pointer transition-colors"
                 >
-                  Hapus Blok
+                  Delete Block
                 </button>
               </div>
             </motion.div>

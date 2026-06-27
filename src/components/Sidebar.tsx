@@ -25,7 +25,7 @@ import {
   GripVertical
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Page, PageType } from '../types';
+import { Page, PageType, AppSettings } from '../types';
 import PageIcon, { getPageIconAccentColor } from './PageIcon';
 import Logo from './Logo';
 
@@ -40,6 +40,8 @@ interface SidebarProps {
   setIsCollapsed: (collapsed: boolean) => void;
   user?: any;
   onLogout?: () => void;
+  settings?: AppSettings;
+  onOpenSettings?: () => void;
 }
 
 export default function Sidebar({
@@ -53,9 +55,15 @@ export default function Sidebar({
   setIsCollapsed,
   user,
   onLogout,
+  settings,
+  onOpenSettings,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
+
+  const t = (idText: string, enText: string) => {
+    return settings?.language === 'id' ? idText : enText;
+  };
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [deleteConfirmPageId, setDeleteConfirmPageId] = useState<string | null>(null);
   const [deleteConfirmPageTitle, setDeleteConfirmPageTitle] = useState<string>('');
@@ -167,7 +175,7 @@ export default function Sidebar({
                 )}
                 <div className="text-left overflow-hidden flex-1 flex items-center gap-1">
                   <p className="text-[13px] font-semibold truncate leading-none text-[#37352F]">
-                    {user?.displayName ? `Ruang ${user.displayName.split(' ')[0]}` : 'Ruang Tsaqif'}
+                    {settings?.profileName ? `Ruang ${settings.profileName.split(' ')[0]}` : user?.displayName ? `Ruang ${user.displayName.split(' ')[0]}` : 'Ruang Tsaqif'}
                   </p>
                   <ChevronsUpDown className="w-3 h-3 text-[#787774]/80 shrink-0" />
                 </div>
@@ -214,7 +222,7 @@ export default function Sidebar({
                         )}
                         <div className="flex flex-col min-w-0">
                           <span className="font-semibold text-[12px] text-[#37352F] leading-tight truncate">
-                            {user?.displayName ? `${user.displayName}'s workspace` : 'tsaqifnico’s Notion'}
+                            {settings?.profileName ? `${settings.profileName}'s workspace` : user?.displayName ? `${user.displayName}'s workspace` : 'Tsaqif\'s workspace'}
                           </span>
                           <span className="text-[9px] text-[#787774] mt-0.5">Cloud Database · Active</span>
                         </div>
@@ -223,14 +231,17 @@ export default function Sidebar({
                       {/* Section 2: Account Actions */}
                       <div className="px-1 py-1">
                         <button 
-                          onClick={() => alert("Anda sudah terhubung dengan Cloud Database!")}
+                          onClick={() => alert("You are already connected to the Cloud Database!")}
                           className="w-full text-left px-2.5 py-1 rounded hover:bg-[#F7F7F5] flex items-center gap-2 text-[#2383E2] font-medium transition-colors"
                         >
                           <ArrowUpCircle className="w-3.5 h-3.5 text-[#2383E2]" />
                           <span>Cloud Active</span>
                         </button>
                         <button 
-                          onClick={() => alert("Pengaturan workspace dibuka!")}
+                          onClick={() => {
+                            setShowWorkspaceMenu(false);
+                            if (onOpenSettings) onOpenSettings();
+                          }}
                           className="w-full text-left px-2.5 py-1 rounded hover:bg-[#F7F7F5] flex items-center gap-2 text-[#4F4F4F] transition-colors"
                         >
                           <Settings className="w-3.5 h-3.5" />
@@ -264,7 +275,7 @@ export default function Sidebar({
                               <Logo size="sm" className="w-4 h-4 rounded-sm" />
                             )}
                             <span className="text-[#37352F]">
-                              {user?.displayName ? `Ruang ${user.displayName.split(' ')[0]}` : 'Ruang Tsaqif'}
+                              {settings?.profileName ? `Ruang ${settings.profileName.split(' ')[0]}` : user?.displayName ? `Ruang ${user.displayName.split(' ')[0]}` : 'Ruang Tsaqif'}
                             </span>
                           </span>
                           <Check className="w-3.5 h-3.5 text-[#0D7A5E] shrink-0" />
@@ -274,7 +285,7 @@ export default function Sidebar({
                         <div 
                           className="px-2.5 py-1.5 rounded hover:bg-[#F7F7F5] flex items-center justify-between cursor-pointer transition-colors"
                           onClick={() => {
-                            alert("Anda terhubung secara real-time ke cloud database!");
+                            alert("You are connected in real-time to the cloud database!");
                             setShowWorkspaceMenu(false);
                           }}
                         >
@@ -314,7 +325,7 @@ export default function Sidebar({
                 <input
                   id="sidebar-search-input"
                   type="text"
-                  placeholder="Search"
+                  placeholder={t('Cari...', 'Search...')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent border-none text-notion-text placeholder-notion-gray/60 outline-hidden text-xs"
@@ -329,7 +340,7 @@ export default function Sidebar({
               {/* Favorites Segment */}
               {favorites.length > 0 && (
                 <div className="mb-4">
-                  <p className="px-2 text-[11px] font-bold text-[#37352F] opacity-40 uppercase tracking-wider mb-2">Favorites</p>
+                  <p className="px-2 text-[11px] font-bold text-[#37352F] opacity-40 uppercase tracking-wider mb-2">{t('Favorit', 'Favorites')}</p>
                   <div className="space-y-0.5 mt-1">
                     {favorites.map((page) => (
                       <SidebarItem
@@ -349,7 +360,7 @@ export default function Sidebar({
               {/* Private Pages Segment */}
               <div>
                 <div className="px-2 text-[11px] font-bold text-[#37352F] uppercase tracking-wider mb-2 flex items-center justify-between select-none">
-                  <span className="opacity-40">Halaman Saya</span>
+                  <span className="opacity-40">{t('Halaman Saya', 'My Pages')}</span>
                   <div className="relative">
                     <button
                       id="btn-add-page-plus"
@@ -358,7 +369,7 @@ export default function Sidebar({
                         setShowAddMenu(!showAddMenu);
                       }}
                       className="p-1 rounded-md text-[#787774] hover:bg-[#EBEBEB] hover:text-[#37352F] cursor-pointer transition-colors"
-                      title="Tambah Halaman Baru"
+                      title={t('Tambah Halaman Baru', 'Add New Page')}
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -384,7 +395,7 @@ export default function Sidebar({
                             className="absolute right-0 top-6 bg-white border border-[#EBEBEB] rounded-lg shadow-[0_4px_16px_rgba(15,15,15,0.08)] py-1.5 w-48 z-50 text-[11px] text-[#37352F] font-normal lowercase tracking-normal"
                           >
                             <div className="px-3 py-1.5 text-[9px] font-bold text-[#787774] uppercase tracking-wider border-b border-[#F1F1F0] mb-1">
-                              Pilih Tipe Halaman:
+                              {t('Pilih Tipe Halaman:', 'Choose Page Type:')}
                             </div>
                             <button
                               onClick={() => {
@@ -454,7 +465,7 @@ export default function Sidebar({
                               className="w-full text-left px-3 py-1.5 hover:bg-[#FDF2F8] flex items-center gap-2 cursor-pointer border-t border-[#F1F1F0] pt-2 mt-1 transition-colors group"
                             >
                               <PageIcon type="blank" className="w-3.5 h-3.5 shrink-0 text-[#EC4899] group-hover:scale-110 transition-transform" /> 
-                              <span className="font-semibold text-[#EC4899]">Halaman Kosong / Blank</span>
+                              <span className="font-semibold text-[#EC4899]">{t('Halaman Kosong / Blank', 'Blank Page')}</span>
                             </button>
                           </motion.div>
                         </>
@@ -466,7 +477,7 @@ export default function Sidebar({
                 <div className="space-y-0.5 mt-1">
                   {regularPages.length === 0 ? (
                     <div className="px-2 py-3 text-center text-xs text-notion-gray italic">
-                      Tidak ada halaman. Buat baru!
+                      {t('Tidak ada halaman. Buat baru!', 'No pages. Create one!')}
                     </div>
                   ) : (
                     regularPages.map((page) => (
@@ -489,10 +500,10 @@ export default function Sidebar({
             <div className="p-3 border-t border-notion-border text-xs text-notion-gray flex flex-col gap-1.5 bg-neutral-50">
               <div className="flex items-center gap-2 text-neutral-600 font-medium">
                 <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                <span>Catat Aja v1.2</span>
+                <span>{t('Catat Aja v1.2', 'LogIt v1.2')}</span>
               </div>
               <p className="text-[10px] text-notion-gray leading-tight">
-                Dilengkapi Kalender Pelacak, Grafik Produktivitas, dan Catatan Kreatif.
+                {t('Dilengkapi Kalender Pelacak, Grafik Produktivitas, dan Catatan Kreatif.', 'Equipped with Habit Tracker, Productivity Charts, and Creative Notes.')}
               </p>
             </div>
           </motion.aside>
@@ -514,12 +525,12 @@ export default function Sidebar({
                   <Trash2 className="w-5 h-5" />
                 </span>
                 <div className="space-y-1">
-                  <h3 className="font-bold text-[13px] text-[#37352F]">Hapus Halaman?</h3>
+                  <h3 className="font-bold text-[13px] text-[#37352F]">{t('Hapus Halaman?', 'Delete Page?')}</h3>
                   <p className="text-[#787774] leading-normal">
-                    Apakah Anda yakin ingin menghapus halaman <strong className="text-[#37352F]">"{deleteConfirmPageTitle}"</strong>? Tindakan ini akan menghapus seluruh isi catatan atau data di dalamnya secara permanen.
+                    {t('Apakah Anda yakin ingin menghapus halaman', 'Are you sure you want to delete the page')} <strong className="text-[#37352F]">"{deleteConfirmPageTitle}"</strong>? {t('Tindakan ini akan menghapus seluruh isi catatan atau data di dalamnya secara permanen.', 'This will permanently delete all contents, notes, and records inside it.')}
                   </p>
                   <div className="text-[10px] text-emerald-800 bg-emerald-50/50 p-1.5 rounded border border-emerald-100 flex items-center gap-1.5 mt-1 font-medium select-none">
-                    <span>💡 Tip:</span> Tahan tombol <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> saat klik ikon Hapus untuk menghapus langsung tanpa konfirmasi ini.
+                    <span>💡 Tip:</span> {t('Tahan tombol', 'Hold')} <kbd className="font-mono bg-white border border-emerald-200/60 px-1 rounded shadow-3xs font-bold text-[9px] cursor-help">Shift</kbd> {t('saat klik ikon Hapus untuk menghapus langsung tanpa konfirmasi ini.', 'when clicking Delete to delete instantly without this confirmation.')}
                   </div>
                 </div>
               </div>
@@ -529,7 +540,7 @@ export default function Sidebar({
                   onClick={() => setDeleteConfirmPageId(null)}
                   className="px-3.5 py-1.5 rounded border border-[#EBEBEB] text-[#37352F] hover:bg-[#F7F7F5] cursor-pointer transition-colors"
                 >
-                  Batal
+                  {t('Batal', 'Cancel')}
                 </button>
                 <button
                   type="button"
@@ -539,7 +550,7 @@ export default function Sidebar({
                   }}
                   className="px-3.5 py-1.5 rounded bg-rose-600 hover:bg-rose-700 text-white cursor-pointer transition-colors"
                 >
-                  Hapus Halaman
+                  {t('Hapus Halaman', 'Delete Page')}
                 </button>
               </div>
             </motion.div>
@@ -599,7 +610,7 @@ function SidebarItem({
             onToggleFavorite(page.id);
           }}
           className={`p-0.5 rounded hover:bg-neutral-200 ${page.isFavorite ? 'text-amber-500' : 'text-neutral-400'}`}
-          title={page.isFavorite ? "Hapus dari Favorit" : "Tambah ke Favorit"}
+          title={page.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
         >
           ★
         </button>
@@ -610,7 +621,7 @@ function SidebarItem({
             onRequestDelete(page.id, page.title, e.shiftKey);
           }}
           className="p-0.5 rounded text-neutral-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-          title="Hapus Halaman (Tahan Shift untuk langsung menghapus)"
+          title="Delete Page (Hold Shift to delete instantly)"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
