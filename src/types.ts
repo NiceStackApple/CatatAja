@@ -9,7 +9,7 @@ export interface Block {
   bridgeData?: BlankBridgeData; // For bridge/page-link block type
 }
 
-export type PageType = 'tracker' | 'calendar' | 'analytics' | 'notes' | 'database' | 'blank' | 'recap';
+export type PageType = 'tracker' | 'calendar' | 'analytics' | 'notes' | 'database' | 'blank' | 'recap' | 'whatsapp';
 
 export interface BlankTableData {
   headers: string[];

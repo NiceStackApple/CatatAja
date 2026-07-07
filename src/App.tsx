@@ -59,6 +59,7 @@ import AnalyticsCharts from './components/AnalyticsCharts';
 import DatabaseView from './components/DatabaseView';
 import PageIcon from './components/PageIcon';
 import ActivityRecapView from './components/ActivityRecapView';
+import WhatsAppBotView from './components/WhatsAppBotView';
 import LiveDateTimeBanner from './components/LiveDateTimeBanner';
 import AiAssistant from './components/AiAssistant';
 import NotificationCenter from './components/NotificationCenter';
@@ -843,7 +844,8 @@ export default function App() {
       database: 'New Project Database',
       notes: 'New Blank Notes',
       blank: 'Custom Canvas Dashboard',
-      recap: 'New Daily Activity Recap'
+      recap: 'New Daily Activity Recap',
+      whatsapp: 'WhatsApp AI Agent / Bot'
     };
 
     const icons: Record<PageType, string> = {
@@ -853,7 +855,8 @@ export default function App() {
       database: '🗂️',
       notes: '📝',
       blank: '✨',
-      recap: '⏳'
+      recap: '⏳',
+      whatsapp: '💬'
     };
 
     const gradientCovers = [
@@ -1425,6 +1428,19 @@ export default function App() {
               <ActivityRecapView
                 activityRecaps={activityRecaps}
                 onUpdateActivities={handleUpdateActivitiesForDate}
+                settings={settings}
+              />
+            )}
+
+            {currentPage.type === 'whatsapp' && (
+              <WhatsAppBotView
+                habits={habits}
+                todayTrackingData={todayTrackingData}
+                onToggleTodayHabit={handleToggleTodayHabit}
+                onSetTodayMood={handleSetTodayMood}
+                onSetTodayHours={handleSetTodayHours}
+                databaseRows={databaseRows}
+                onUpdateDatabaseRows={setDatabaseRows}
                 settings={settings}
               />
             )}

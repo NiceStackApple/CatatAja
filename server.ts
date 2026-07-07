@@ -12,6 +12,7 @@ const PORT = 3000;
 
 // Enable JSON parser for body
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Secure Server-Side Proxy Endpoint for Groq AI with transparent Gemini fallback
 app.post('/api/ai/chat', async (req, res) => {
@@ -118,6 +119,104 @@ app.post('/api/ai/chat', async (req, res) => {
       error: 'Failed to communicate with AI assistant.',
       details: error.message
     });
+  }
+});
+
+// WhatsApp Bot Incoming Twilio/JSON Webhook Endpoint
+app.post('/api/whatsapp/webhook', async (req, res) => {
+  try {
+    // Twilio sends Body as form-urlencoded, but let's also support JSON bodies
+    const messageText = req.body.Body || req.body.message || req.body.text || '';
+    const fromNumber = req.body.From || 'Simulated User';
+
+    if (!messageText.trim()) {
+      if (req.headers.accept && req.headers.accept.includes('application/json')) {
+        return res.status(400).json({ error: 'Message body is required.' });
+      }
+      res.set('Content-Type', 'text/xml');
+      return res.send('<Response><Message>Mohon maaf, pesan Anda kosong.</Message></Response>');
+    }
+
+    const systemPrompt = `You are an intelligent WhatsApp AI Bot for the 'Ruang Tsaqif' productivity dashboard.
+You receive a text message from a user. Formulate a friendly, warm, and highly motivating response in Indonesian language. Acknowledge what they wrote. Keep it under 2-3 sentences. Mention that the dashboard data has been updated in their workspace! Start with a nice emoji.`;
+
+    let replyContent = "Halo! Layanan AI WhatsApp Bot siap membantu Anda mencatat produktivitas Anda. 🚀";
+
+    // Call Groq or Gemini
+    const groqKey = process.env.GROQ_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    if (groqKey && groqKey.trim() !== '') {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.1-8b-instant',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: messageText }
+            ],
+            temperature: 0.7,
+            max_tokens: 400
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          replyContent = data.choices[0]?.message?.content || replyContent;
+        }
+      } catch (err) {
+        console.warn('Groq failed inside webhook, calling Gemini fallback:', err);
+      }
+    } else if (geminiKey && geminiKey.trim() !== '') {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: geminiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            }
+          }
+        });
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: [{ role: 'user', parts: [{ text: messageText }] }],
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.7,
+          }
+        });
+        replyContent = response.text || replyContent;
+      } catch (err) {
+        console.error('Gemini failed inside webhook:', err);
+      }
+    }
+
+    // Return response based on Accept header (JSON or TwiML)
+    if (req.headers.accept && req.headers.accept.includes('application/json')) {
+      return res.json({
+        success: true,
+        reply: replyContent,
+        from: fromNumber
+      });
+    }
+
+    // Default Twilio TwiML format response
+    res.set('Content-Type', 'text/xml');
+    return res.send(`
+      <Response>
+        <Message>${replyContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Message>
+      </Response>
+    `.trim());
+
+  } catch (error: any) {
+    console.error('Error in WhatsApp webhook:', error);
+    res.set('Content-Type', 'text/xml');
+    return res.send('<Response><Message>Terjadi kendala pada server asisten AI Anda. Silakan coba sesaat lagi.</Message></Response>');
   }
 });
 
