@@ -1122,14 +1122,6 @@ export default function App() {
                 >
                   <Star className="w-3.5 h-3.5 fill-current" />
                 </button>
-                <button
-                  id="btn-header-config-habits"
-                  onClick={() => setShowConfigModal(true)}
-                  className="p-1.5 text-[#37352F]/60 hover:text-[#37352F] hover:bg-white rounded transition-all"
-                  title="Manage Habit Templates"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                </button>
               </div>
             </div>
 
