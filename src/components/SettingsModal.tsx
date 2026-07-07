@@ -16,10 +16,12 @@ import {
   Sun,
   Laptop,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  Bell,
+  Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AppSettings, Page, Habit, TrackingDay, DatabaseRow, ActivityEntry } from '../types';
+import { AppSettings, Page, Habit, TrackingDay, DatabaseRow, ActivityEntry, NotificationSettings } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -43,9 +45,12 @@ interface SettingsModalProps {
     settings?: AppSettings;
   }) => void;
   onResetAllData: () => Promise<void>;
+  // Notification properties
+  notificationSettings: NotificationSettings;
+  onUpdateNotificationSettings: (newSettings: NotificationSettings) => void;
 }
 
-type ActiveTab = 'profile' | 'data';
+type ActiveTab = 'profile' | 'notifications' | 'data';
 
 export default function SettingsModal({
   isOpen,
@@ -60,7 +65,9 @@ export default function SettingsModal({
   databaseRows,
   activityRecaps,
   onImportData,
-  onResetAllData
+  onResetAllData,
+  notificationSettings,
+  onUpdateNotificationSettings
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   
@@ -68,6 +75,21 @@ export default function SettingsModal({
   const [profileName, setProfileName] = useState(settings.profileName || user?.displayName || 'Tsaqif');
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
+
+  // Notification tab states
+  const [browserPermission, setBrowserPermission] = useState<string>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported'
+  );
+
+  const requestBrowserPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    try {
+      const res = await Notification.requestPermission();
+      setBrowserPermission(res);
+    } catch (e) {
+      console.warn('Notification permission block or failure:', e);
+    }
+  };
 
   // Data management states
   const [importError, setImportError] = useState('');
@@ -254,6 +276,18 @@ export default function SettingsModal({
               </button>
 
               <button
+                onClick={() => setActiveTab('notifications')}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === 'notifications'
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs'
+                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-900 dark:hover:text-white'
+                }`}
+              >
+                <Bell className="w-3.5 h-3.5" />
+                <span>{t('Notifikasi', 'Notifications')}</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('data')}
                 className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                   activeTab === 'data'
@@ -279,6 +313,7 @@ export default function SettingsModal({
           <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between select-none">
             <h3 className="text-sm font-bold text-neutral-950 dark:text-white">
               {activeTab === 'profile' && t('Pengaturan Profil', 'Profile Settings')}
+              {activeTab === 'notifications' && t('Pengaturan Notifikasi & Pengingat Latar Belakang', 'Notification & Background Reminders')}
               {activeTab === 'data' && t('Manajemen Data & Cadangan', 'Data & Backup Management')}
             </h3>
             
@@ -401,6 +436,151 @@ export default function SettingsModal({
               </div>
             )}
 
+            {/* 2. NOTIFICATIONS TAB */}
+            {activeTab === 'notifications' && (
+              <div className="space-y-5">
+                
+                {/* Browser Notification Status Box */}
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-neutral-50/50 dark:bg-neutral-950/20 space-y-3">
+                  <h4 className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                    <Laptop className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>{t('Status Notifikasi Browser', 'Browser Notification Status')}</span>
+                  </h4>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                        {t('Izin Notifikasi Sistem:', 'System Notification Permission:')}{' '}
+                        <span className={`font-mono text-[11px] font-bold uppercase ${
+                          browserPermission === 'granted' 
+                            ? 'text-emerald-600 dark:text-emerald-400' 
+                            : browserPermission === 'denied' 
+                              ? 'text-red-500' 
+                              : 'text-amber-500'
+                        }`}>
+                          {browserPermission === 'granted' && t('DISETUJUI', 'GRANTED')}
+                          {browserPermission === 'denied' && t('DITOLAK / DIBLOKIR', 'DENIED')}
+                          {browserPermission === 'default' && t('BELUM DIATUR', 'DEFAULT')}
+                          {browserPermission === 'unsupported' && t('TIDAK DIDUKUNG PERAMBAN', 'UNSUPPORTED BY BROWSER')}
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-neutral-400">
+                        {t('Izinkan notifikasi agar sistem bisa mengirimkan pemicu pengingat harian atau check-in.', 'Allow notification access for system reminders or check-ins to arrive.')}
+                      </p>
+                    </div>
+
+                    {browserPermission !== 'granted' && browserPermission !== 'unsupported' && (
+                      <button
+                        onClick={requestBrowserPermission}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors shrink-0"
+                      >
+                        {t('Izinkan Notif', 'Grant Permission')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Background Notification capabilities */}
+                <div className="border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 bg-neutral-50/50 dark:bg-neutral-950/20 space-y-3">
+                  <h4 className="text-xs font-bold text-neutral-900 dark:text-white flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-sky-500" />
+                    <span>{t('Pengingat Latar Belakang (Saat Tab Ditutup)', 'Background Reminders (When Tab is Closed)')}</span>
+                  </h4>
+
+                  <div className="space-y-3 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                    <p>
+                      {t('Untuk menerima pengingat harian bahkan ketika Anda sedang tidak membuka peramban (browser) atau web Ruang Tsaqif, Anda memiliki dua opsi handal:', 'To receive reminders even when you do not actively have the web page open, you can utilize these two methods:')}
+                    </p>
+
+                    <div className="space-y-2.5">
+                      {/* Option 1: Telegram Bot */}
+                      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 rounded-lg space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400 block">
+                          {t('Metode 1: Integrasi Telegram Bot (Sangat Direkomendasikan)', 'Method 1: Telegram Bot Integration (Highly Recommended)')}
+                        </span>
+                        <p className="text-[10px] leading-normal text-neutral-500 dark:text-neutral-400">
+                          {t('Karena bot Telegram berjalan di cloud server kami 24/7, Anda akan secara otomatis menerima notifikasi pengingat instan langsung ke handphone atau desktop Anda melalui Telegram kapan saja, bahkan ketika laptop/ponsel dalam keadaan mati.', 'Since the Telegram bot operates on our cloud server 24/7, you will receive real-time updates and push notifications on your Telegram account on any device, entirely independent of the browser.')}
+                        </p>
+                      </div>
+
+                      {/* Option 2: Pasang sebagai Aplikasi PWA */}
+                      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-3 rounded-lg space-y-1">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
+                          {t('Metode 2: Pasang sebagai Aplikasi PWA', 'Method 2: Install as a PWA (Native App)')}
+                        </span>
+                        <p className="text-[10px] leading-normal text-neutral-500 dark:text-neutral-400">
+                          {t('Ruang Tsaqif mendukung penuh standar Progressive Web App (PWA). Klik tombol pasang/tambahkan ke layar utama pada browser Anda untuk menginstalnya sebagai aplikasi asli. Ini mendaftarkan Service Worker latar belakang kami untuk memicu notifikasi terjadwal lokal bahkan saat aplikasi ditutup.', 'Ruang Tsaqif is fully PWA-compatible. Click the install / add-to-homescreen button in your browser to run it natively. This registers our background Service Worker to schedule reminders offline.')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Schedule controls inside setting panel */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-extrabold text-neutral-500 uppercase tracking-widest block">
+                    {t('Konfigurasi Pengingat Aktif', 'Active Reminders Configuration')}
+                  </h4>
+
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {/* Activity reminder */}
+                    <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-950/40 rounded-xl border border-neutral-100 dark:border-neutral-800 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-neutral-700 dark:text-neutral-300">
+                        <input
+                          type="checkbox"
+                          checked={notificationSettings.enableDailyActivityReminder}
+                          onChange={(e) =>
+                            onUpdateNotificationSettings({ ...notificationSettings, enableDailyActivityReminder: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>{t('Catat Aktivitas Harian', 'Daily Activity Log')}</span>
+                      </label>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        {notificationSettings.dailyActivityReminderTime}
+                      </span>
+                    </div>
+
+                    {/* Todo reminder */}
+                    <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-950/40 rounded-xl border border-neutral-100 dark:border-neutral-800 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-neutral-700 dark:text-neutral-300">
+                        <input
+                          type="checkbox"
+                          checked={notificationSettings.enableTodoReminder}
+                          onChange={(e) =>
+                            onUpdateNotificationSettings({ ...notificationSettings, enableTodoReminder: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>{t('Pengingat Tugas / To-Do', 'Todo / Deadline Tasks')}</span>
+                      </label>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        {notificationSettings.todoReminderTime}
+                      </span>
+                    </div>
+
+                    {/* Habit reminder */}
+                    <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-950/40 rounded-xl border border-neutral-100 dark:border-neutral-800 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold text-neutral-700 dark:text-neutral-300">
+                        <input
+                          type="checkbox"
+                          checked={notificationSettings.enableHabitReminder}
+                          onChange={(e) =>
+                            onUpdateNotificationSettings({ ...notificationSettings, enableHabitReminder: e.target.checked })
+                          }
+                          className="w-3.5 h-3.5 rounded border-neutral-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span>{t('Check-Off Kebiasaan (Routine)', 'Habit Checklist')}</span>
+                      </label>
+                      <span className="text-[10px] text-neutral-400 font-mono">
+                        {notificationSettings.habitReminderTime}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            )}
 
 
             {/* 3. DATA TAB */}

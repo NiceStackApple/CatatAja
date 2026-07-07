@@ -122,27 +122,26 @@ app.post('/api/ai/chat', async (req, res) => {
   }
 });
 
-// WhatsApp Bot Incoming Twilio/JSON Webhook Endpoint
-app.post('/api/whatsapp/webhook', async (req, res) => {
+// Telegram Bot Webhook Endpoint
+app.post('/api/telegram/webhook', async (req, res) => {
   try {
-    // Twilio sends Body as form-urlencoded, but let's also support JSON bodies
-    const messageText = req.body.Body || req.body.message || req.body.text || '';
-    const fromNumber = req.body.From || 'Simulated User';
+    const update = req.body;
+    
+    // Support simulated requests with raw text or standard Telegram Updates
+    const messageText = update?.message?.text || update?.text || '';
+    const chatId = update?.message?.chat?.id || update?.chatId;
+    const fromName = update?.message?.from?.first_name || 'User';
 
     if (!messageText.trim()) {
-      if (req.headers.accept && req.headers.accept.includes('application/json')) {
-        return res.status(400).json({ error: 'Message body is required.' });
-      }
-      res.set('Content-Type', 'text/xml');
-      return res.send('<Response><Message>Mohon maaf, pesan Anda kosong.</Message></Response>');
+      return res.status(200).json({ ok: true, info: 'Empty message' });
     }
 
-    const systemPrompt = `You are an intelligent WhatsApp AI Bot for the 'Ruang Tsaqif' productivity dashboard.
+    const systemPrompt = `You are an intelligent Telegram AI Bot for the 'Ruang Tsaqif' productivity dashboard.
 You receive a text message from a user. Formulate a friendly, warm, and highly motivating response in Indonesian language. Acknowledge what they wrote. Keep it under 2-3 sentences. Mention that the dashboard data has been updated in their workspace! Start with a nice emoji.`;
 
-    let replyContent = "Halo! Layanan AI WhatsApp Bot siap membantu Anda mencatat produktivitas Anda. 🚀";
+    let replyContent = "Halo! Layanan AI Telegram Bot siap membantu Anda mencatat produktivitas Anda. 🚀";
 
-    // Call Groq or Gemini
+    // Call Groq or Gemini to process
     const groqKey = process.env.GROQ_API_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
 
@@ -183,7 +182,7 @@ You receive a text message from a user. Formulate a friendly, warm, and highly m
           }
         });
         const response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
+          model: 'gemini-2.5-flash',
           contents: [{ role: 'user', parts: [{ text: messageText }] }],
           config: {
             systemInstruction: systemPrompt,
@@ -196,27 +195,34 @@ You receive a text message from a user. Formulate a friendly, warm, and highly m
       }
     }
 
-    // Return response based on Accept header (JSON or TwiML)
-    if (req.headers.accept && req.headers.accept.includes('application/json')) {
-      return res.json({
-        success: true,
-        reply: replyContent,
-        from: fromNumber
-      });
+    // Send response back to Telegram if a Chat ID is present
+    const botToken = (req.query.token as string) || process.env.TELEGRAM_BOT_TOKEN;
+    if (chatId && botToken) {
+      try {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: replyContent
+          })
+        });
+      } catch (err) {
+        console.error('Failed to send message to Telegram API:', err);
+      }
     }
 
-    // Default Twilio TwiML format response
-    res.set('Content-Type', 'text/xml');
-    return res.send(`
-      <Response>
-        <Message>${replyContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</Message>
-      </Response>
-    `.trim());
+    // Always respond with success status to Telegram webhook
+    return res.status(200).json({
+      success: true,
+      reply: replyContent,
+      chatId: chatId,
+      from: fromName
+    });
 
   } catch (error: any) {
-    console.error('Error in WhatsApp webhook:', error);
-    res.set('Content-Type', 'text/xml');
-    return res.send('<Response><Message>Terjadi kendala pada server asisten AI Anda. Silakan coba sesaat lagi.</Message></Response>');
+    console.error('Error in Telegram webhook:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

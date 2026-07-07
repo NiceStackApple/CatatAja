@@ -102,7 +102,7 @@ export default function PageIcon({ type, className = 'w-5 h-5', size }: PageIcon
         </span>
       );
 
-    case 'whatsapp':
+    case 'telegram':
       return (
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -115,7 +115,8 @@ export default function PageIcon({ type, className = 'w-5 h-5', size }: PageIcon
           className={className}
           style={style}
         >
-          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          <path d="m22 2-7 20-4-9-9-4Z" />
+          <path d="M22 2 11 13" />
         </svg>
       );
 
@@ -153,8 +154,8 @@ export function getPageIconAccentColor(type: PageType): string {
       return 'text-[#EC4899] bg-[#FDF2F8] border-[#EC4899]/15';
     case 'recap':
       return 'text-[#10B981] bg-[#ECFDF5] border-[#10B981]/15';
-    case 'whatsapp':
-      return 'text-[#16A34A] bg-[#DCFCE7] border-[#16A34A]/15';
+    case 'telegram':
+      return 'text-[#0284C7] bg-[#F0F9FF] border-[#0284C7]/15';
     case 'notes':
     default:
       return 'text-[#4F4F4F] bg-[#F1F1F0] border-[#4F4F4F]/15';

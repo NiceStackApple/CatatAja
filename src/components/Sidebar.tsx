@@ -459,13 +459,13 @@ export default function Sidebar({
                             </button>
                             <button
                               onClick={() => {
-                                addNewPageClick('whatsapp');
+                                addNewPageClick('telegram');
                                 setShowAddMenu(false);
                               }}
                               className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
                             >
-                              <PageIcon type="whatsapp" className="w-3.5 h-3.5 shrink-0 text-[#16A34A]" /> 
-                              <span className="capitalize">WhatsApp Bot Agent</span>
+                              <PageIcon type="telegram" className="w-3.5 h-3.5 shrink-0 text-[#0284C7]" /> 
+                              <span className="capitalize">Telegram Bot Agent</span>
                             </button>
                             <button
                               onClick={() => {

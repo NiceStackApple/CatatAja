@@ -59,7 +59,7 @@ import AnalyticsCharts from './components/AnalyticsCharts';
 import DatabaseView from './components/DatabaseView';
 import PageIcon from './components/PageIcon';
 import ActivityRecapView from './components/ActivityRecapView';
-import WhatsAppBotView from './components/WhatsAppBotView';
+import TelegramBotView from './components/TelegramBotView';
 import LiveDateTimeBanner from './components/LiveDateTimeBanner';
 import AiAssistant from './components/AiAssistant';
 import NotificationCenter from './components/NotificationCenter';
@@ -845,7 +845,7 @@ export default function App() {
       notes: 'New Blank Notes',
       blank: 'Custom Canvas Dashboard',
       recap: 'New Daily Activity Recap',
-      whatsapp: 'WhatsApp AI Agent / Bot'
+      telegram: 'Telegram AI Agent / Bot'
     };
 
     const icons: Record<PageType, string> = {
@@ -856,7 +856,7 @@ export default function App() {
       notes: '📝',
       blank: '✨',
       recap: '⏳',
-      whatsapp: '💬'
+      telegram: '✈️'
     };
 
     const gradientCovers = [
@@ -1432,9 +1432,10 @@ export default function App() {
               />
             )}
 
-            {currentPage.type === 'whatsapp' && (
-              <WhatsAppBotView
+            {currentPage.type === 'telegram' && (
+              <TelegramBotView
                 habits={habits}
+                onUpdateHabits={setHabits}
                 todayTrackingData={todayTrackingData}
                 onToggleTodayHabit={handleToggleTodayHabit}
                 onSetTodayMood={handleSetTodayMood}
@@ -2011,6 +2012,8 @@ export default function App() {
         activityRecaps={activityRecaps}
         onImportData={handleImportData}
         onResetAllData={handleResetAllData}
+        notificationSettings={notificationSettings}
+        onUpdateNotificationSettings={setNotificationSettings}
       />
 
     </div>

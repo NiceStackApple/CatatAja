@@ -66,22 +66,25 @@ export default function NotificationCenter({
 
   return (
     <div className="relative font-sans">
-      {/* Trigger Bell Button */}
+      {/* Trigger Bell Button with unambiguous label */}
       <button
         id="btn-trigger-notification-center"
         onClick={() => setIsOpen(!isOpen)}
-        className={`p-1.5 rounded-md transition-all relative cursor-pointer ${
+        className={`px-2 py-1.5 rounded-md transition-all relative cursor-pointer flex items-center gap-1.5 text-xs font-semibold ${
           isOpen
             ? 'bg-indigo-50 text-indigo-600 border border-indigo-200 shadow-3xs'
-            : 'text-[#37352F]/60 hover:text-[#37352F] hover:bg-white border border-transparent'
+            : 'text-[#37352F]/60 hover:text-[#37352F] hover:bg-neutral-100 border border-transparent'
         }`}
-        title={t('Pusat Notifikasi', 'Notification Center')}
+        title={t('Pusat Notifikasi & Pengingat', 'Notification & Reminders Hub')}
       >
-        <Bell className={`w-3.5 h-3.5 ${unreadCount > 0 ? 'animate-swing origin-top' : ''}`} />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-black flex items-center justify-center px-1 border border-white">
+        <Bell className={`w-3.5 h-3.5 ${unreadCount > 0 ? 'animate-swing origin-top text-indigo-600' : ''}`} />
+        <span className="text-[11px] font-medium hidden sm:inline">{t('Pengingat', 'Reminders')}</span>
+        {unreadCount > 0 ? (
+          <span className="min-w-4 h-4 bg-rose-500 text-white rounded-full text-[9px] font-black flex items-center justify-center px-1">
             {unreadCount}
           </span>
+        ) : (
+          <span className="w-1.5 h-1.5 rounded-full bg-neutral-300" />
         )}
       </button>
 
@@ -89,9 +92,9 @@ export default function NotificationCenter({
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop wrapper for safe closing */}
+            {/* Backdrop wrapper for safe closing with clean overlay on mobile */}
             <div
-              className="fixed inset-0 z-40 bg-transparent"
+              className="fixed inset-0 z-40 bg-black/15 md:bg-transparent"
               onClick={() => setIsOpen(false)}
             />
 
@@ -100,7 +103,7 @@ export default function NotificationCenter({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 10 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="absolute right-0 mt-2.5 w-[340px] sm:w-[380px] max-h-[480px] bg-white border border-[#EBEBEB] rounded-xl shadow-[0_12px_36px_rgba(15,15,15,0.12)] z-50 overflow-hidden flex flex-col"
+              className="fixed inset-x-4 top-[15%] md:inset-x-auto md:absolute md:right-0 md:top-full mt-2 w-auto md:w-[380px] max-h-[80vh] md:max-h-[480px] bg-white border border-[#EBEBEB] rounded-xl shadow-[0_12px_36px_rgba(15,15,15,0.12)] z-50 overflow-hidden flex flex-col"
             >
               {/* Header */}
               <div className="p-3.5 border-b border-neutral-100 bg-neutral-50/50 flex items-center justify-between">
