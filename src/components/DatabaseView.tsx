@@ -110,7 +110,7 @@ export default function DatabaseView({ rows, onUpdateRows, settings }: DatabaseV
             }`}
           >
             <Kanban className="w-3.5 h-3.5" />
-            {t('Board Kanban', 'Kanban Board')}
+            {t('Papan Todo', 'Todo Board')}
           </button>
           <button
             id="btn-view-table"

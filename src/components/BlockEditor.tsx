@@ -123,7 +123,7 @@ export default function BlockEditor({
     const newBlock: Block = {
       id: `blk-${Date.now()}`,
       type,
-      content: getPlaceholderFor(type),
+      content: '',
       isCompleted: false,
       icon: type === 'callout' ? '💡' : undefined,
       tableData,

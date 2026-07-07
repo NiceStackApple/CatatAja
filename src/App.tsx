@@ -394,7 +394,7 @@ export default function App() {
               { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
               { id: 'pg-2', title: 'Workspace Tracking Calendar', icon: '📅', cover: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)', type: 'calendar', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
               { id: 'pg-3', title: 'Productivity Analytics', icon: '📊', cover: 'linear-gradient(135deg, #fd1d1d 0%, #fcb045 100%)', type: 'analytics', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-              { id: 'pg-4', title: 'Papan Kerja Projek (Kanban)', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
+              { id: 'pg-4', title: 'Todo', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
               { id: 'pg-5', title: 'Catatan & Ide Kreatif', icon: '📝', cover: 'linear-gradient(135deg, #f1a7a1 0%, #f7dbbd 100%)', type: 'notes', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
               { id: 'pg-6', title: 'Dashboard Kustom (Blank Canvas)', icon: '✨', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'blank', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
               { id: 'pg-recap', title: 'Daily Activity Recap', icon: '⏳', cover: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', type: 'recap', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] }
@@ -754,7 +754,7 @@ export default function App() {
       { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
       { id: 'pg-2', title: 'Workspace Tracking Calendar', icon: '📅', cover: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)', type: 'calendar', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
       { id: 'pg-3', title: 'Productivity Analytics', icon: '📊', cover: 'linear-gradient(135deg, #fd1d1d 0%, #fcb045 100%)', type: 'analytics', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-      { id: 'pg-4', title: 'Papan Kerja Projek (Kanban)', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
+      { id: 'pg-4', title: 'Todo', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
       { id: 'pg-5', title: 'Catatan & Ide Kreatif', icon: '📝', cover: 'linear-gradient(135deg, #f1a7a1 0%, #f7dbbd 100%)', type: 'notes', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
       { id: 'pg-6', title: 'Dashboard Kustom (Blank Canvas)', icon: '✨', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'blank', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
       { id: 'pg-recap', title: 'Daily Activity Recap', icon: '⏳', cover: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', type: 'recap', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] }
@@ -1161,14 +1161,16 @@ export default function App() {
                   {/* Left Column: Habits Checked checklist for today */}
                   <div className="md:col-span-2 space-y-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">List Todo</h2>
+                      <h2 className="text-xs font-bold text-[#37352F] opacity-40 uppercase tracking-widest">
+                        {settings.language === 'id' ? 'Rutinitas' : 'Routine List'}
+                      </h2>
                       <button
                         id="btn-manage-habits"
                         onClick={() => setShowConfigModal(true)}
                         className="px-2.5 py-1 text-xs font-semibold text-[#1A73E8] bg-blue-50/50 hover:bg-blue-50 hover:text-[#1557B0] border border-blue-100 rounded-md transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Atur List Todo</span>
+                        <span>{settings.language === 'id' ? 'Atur Rutinitas' : 'Manage Routine List'}</span>
                       </button>
                     </div>
                     
@@ -1977,12 +1979,14 @@ export default function App() {
         todayTrackingData={todayTrackingData}
         databaseRows={databaseRows}
         activePageTitle={currentPage?.title}
+        pages={pages}
         onToggleTodayHabit={handleToggleTodayHabit}
         onUpdateTrackingDay={handleUpdateTrackingDay}
         onUpdateDatabaseRows={setDatabaseRows}
         onUpdateActivitiesForDate={handleUpdateActivitiesForDate}
         activityRecaps={activityRecaps}
         onAddNotification={triggerToastNotification}
+        onUpdatePageBlocks={handleUpdatePageBlocks}
       />
 
       <SettingsModal

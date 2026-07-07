@@ -170,7 +170,7 @@ export const INITIAL_PAGES: Page[] = [
   },
   {
     id: 'pg-4',
-    title: 'Project Kanban Board',
+    title: 'Todo',
     icon: '🗂️',
     cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)',
     type: 'database',
@@ -246,7 +246,7 @@ export const INITIAL_PAGES: Page[] = [
       {
         id: 'blk-u-4',
         type: 'bridge',
-        content: 'Quick Bridge: Kanban Board',
+        content: 'Quick Bridge: Todo Board',
         bridgeData: {
           targetPageId: 'pg-2',
           displayMode: 'stats'

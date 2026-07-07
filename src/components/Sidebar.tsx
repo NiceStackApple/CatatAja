@@ -435,7 +435,7 @@ export default function Sidebar({
                               className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
                             >
                               <PageIcon type="database" className="w-3.5 h-3.5 shrink-0 text-[#D97706]" />
-                              <span className="capitalize">Tasks (Board/Kanban)</span>
+                              <span className="capitalize">Todo</span>
                             </button>
                             <button
                               onClick={() => {

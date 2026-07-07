@@ -109,13 +109,34 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Helper to recursively remove undefined values so Firestore does not throw errors
+const removeUndefined = (obj: any): any => {
+  if (obj === undefined) return null;
+  if (obj === null) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefined(item));
+  }
+  if (typeof obj === 'object') {
+    const newObj: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        newObj[key] = removeUndefined(val);
+      }
+    }
+    return newObj;
+  }
+  return obj;
+};
+
 // Save user data to Firestore with offline check
 export const saveUserDataToCloud = async (userId: string, data: any) => {
   const path = `users/${userId}`;
   try {
+    const sanitizedData = removeUndefined(data);
     const userDocRef = doc(db, 'users', userId);
     await setDoc(userDocRef, {
-      ...data,
+      ...sanitizedData,
       updatedAt: new Date().toISOString()
     }, { merge: true });
     console.log("Cloud sync successful");
