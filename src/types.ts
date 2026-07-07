@@ -94,3 +94,22 @@ export interface AppSettings {
   profileName?: string;
 }
 
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string; // ISO string
+  isRead: boolean;
+  type: 'todo' | 'habit' | 'activity' | 'custom';
+  actionUrl?: string;
+}
+
+export interface NotificationSettings {
+  enableDailyActivityReminder: boolean;
+  dailyActivityReminderTime: string; // "HH:MM"
+  enableTodoReminder: boolean;
+  todoReminderTime: string; // "HH:MM"
+  enableHabitReminder: boolean;
+  habitReminderTime: string; // "HH:MM"
+}
+

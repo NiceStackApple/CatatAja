@@ -124,7 +124,74 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay, setti
   };
 
   // Math helper for streaks
-  const completedAllHabitsCount = trackingDays.filter(d => d.habitsCompleted.length === habits.length).length;
+  const calculateStreak = (days: TrackingDay[]): number => {
+    if (!days || days.length === 0) return 0;
+    
+    // Filter days that have completed habits
+    const completedDays = days.filter(d => d.habitsCompleted && d.habitsCompleted.length > 0);
+    if (completedDays.length === 0) return 0;
+
+    // Map of date string -> completed count
+    const dateMap = new Map<string, boolean>();
+    completedDays.forEach(d => {
+      dateMap.set(d.date, true);
+    });
+
+    // Sort dates ascending
+    const sortedDates = completedDays
+      .map(d => d.date)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    const latestDateStr = sortedDates[sortedDates.length - 1];
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    const formatDate = (d: Date) => {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const todayStr = formatDate(today);
+    const yesterdayStr = formatDate(yesterday);
+
+    let anchorDateStr = latestDateStr;
+    
+    // If the latest completed habit was done today or yesterday, use today as anchor
+    if (dateMap.has(todayStr) || dateMap.has(yesterdayStr)) {
+      anchorDateStr = dateMap.has(todayStr) ? todayStr : yesterdayStr;
+    }
+
+    // Calculate streak backwards from anchorDateStr
+    let streak = 0;
+    let current = new Date(anchorDateStr);
+    
+    while (true) {
+      const currentStr = formatDate(current);
+      if (dateMap.has(currentStr)) {
+        streak++;
+        // Go to previous day
+        current.setDate(current.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  };
+
+  const currentStreak = calculateStreak(trackingDays);
+  const completedAllHabitsCount = habits.length > 0 
+    ? trackingDays.filter(d => d.habitsCompleted.length >= habits.length).length 
+    : 0;
+
+  // Average productivity hours calculation
+  const productiveDays = trackingDays.filter(d => d.productiveHours > 0);
+  const avgProductive = productiveDays.length > 0
+    ? (productiveDays.reduce((acc, d) => acc + d.productiveHours, 0) / productiveDays.length).toFixed(1)
+    : '0.0';
 
   return (
     <div className="w-full max-w-5xl mx-auto py-4 space-y-6">
@@ -133,7 +200,11 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay, setti
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">{t('Penyelesaian Beruntun', 'Streak Completion')}</span>
-            <p className="text-xl font-bold text-[#37352F]">{t('14 Hari Terbuka', '14 Days Streak')}</p>
+            <p className="text-xl font-bold text-[#37352F]">
+              {settings?.language === 'id' 
+                ? `${currentStreak} Hari Beruntun` 
+                : `${currentStreak} Days Streak`}
+            </p>
           </div>
           <div className="w-9 h-9 rounded bg-[#FBEEEE] text-[#EB5757] flex items-center justify-center">
             <Flame className="w-4 h-4 fill-current" />
@@ -153,7 +224,9 @@ export default function HabitCalendar({ habits, trackingDays, onUpdateDay, setti
         <div className="bg-white border border-[#EBEBEB] rounded-lg p-3.5 flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="text-[10px] text-[#787774] font-semibold uppercase tracking-wider block">{t('Rata-Rata Produktif', 'Average Productivity')}</span>
-            <p className="text-xl font-bold text-[#37352F] font-mono">5.8 {t('Jam/Hari', 'Hours/Day')}</p>
+            <p className="text-xl font-bold text-[#37352F] font-mono">
+              {avgProductive} {t('Jam/Hari', 'Hours/Day')}
+            </p>
           </div>
           <div className="w-9 h-9 rounded bg-indigo-50 text-indigo-700 flex items-center justify-center">
             <Zap className="w-4 h-4" />

@@ -46,7 +46,8 @@ import {
   Heading1,
   Heading2,
   Pin,
-  Type
+  Type,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,6 +60,8 @@ import DatabaseView from './components/DatabaseView';
 import PageIcon from './components/PageIcon';
 import ActivityRecapView from './components/ActivityRecapView';
 import LiveDateTimeBanner from './components/LiveDateTimeBanner';
+import AiAssistant from './components/AiAssistant';
+import NotificationCenter from './components/NotificationCenter';
 import Logo from './components/Logo';
 import { TiptapEditor } from './components/TiptapEditor';
 import SettingsModal from './components/SettingsModal';
@@ -72,7 +75,7 @@ import {
   INITIAL_DATABASE_ROWS 
 } from './mockData';
 
-import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry, AppSettings } from './types';
+import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry, AppSettings, NotificationItem, NotificationSettings } from './types';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, loginWithGoogle, logoutUser, saveUserDataToCloud, fetchUserDataFromCloud, updateUserProfileName } from './lib/firebase';
 
@@ -192,6 +195,147 @@ export default function App() {
   const [isKeepEditorOpen, setIsKeepEditorOpen] = useState(false);
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // --- NOTIFICATION ENGINE STATES ---
+  interface ToastItem {
+    id: string;
+    title: string;
+    message: string;
+    type: 'todo' | 'habit' | 'activity' | 'custom';
+  }
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
+    const saved = localStorage.getItem('nt_notifications');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(() => {
+    const saved = localStorage.getItem('nt_notification_settings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return {
+      enableDailyActivityReminder: true,
+      dailyActivityReminderTime: '21:00',
+      enableTodoReminder: true,
+      todoReminderTime: '09:00',
+      enableHabitReminder: true,
+      habitReminderTime: '18:00',
+    };
+  });
+
+  const [triggeredAlertsToday, setTriggeredAlertsToday] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('nt_triggered_alerts_today');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const filtered: Record<string, boolean> = {};
+        Object.keys(parsed).forEach(key => {
+          if (key.startsWith(todayStr)) {
+            filtered[key] = parsed[key];
+          }
+        });
+        return filtered;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return {};
+  });
+
+  const playNotificationChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+      osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.12); // E5
+      osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.24); // G5
+      
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.04);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.8);
+      
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.8);
+    } catch (e) {
+      console.warn("Audio chime prevented or unsupported by browser sandbox:", e);
+    }
+  };
+
+  const triggerSystemNotification = (title: string, message: string) => {
+    try {
+      if (!('Notification' in window)) return;
+      
+      if (Notification.permission === 'granted') {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then(registration => {
+            registration.showNotification(title, {
+              body: message,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+              tag: 'workspace-notif',
+              vibrate: [200, 100, 200],
+              renotify: true
+            } as any);
+          }).catch(() => {
+            new Notification(title, { body: message, icon: '/favicon.ico' });
+          });
+        } else {
+          new Notification(title, { body: message, icon: '/favicon.ico' });
+        }
+      }
+    } catch (err) {
+      console.warn("System notification failed or blocked:", err);
+    }
+  };
+
+  const triggerToastNotification = (
+    title: string,
+    message: string,
+    type: 'todo' | 'habit' | 'activity' | 'custom'
+  ) => {
+    playNotificationChime();
+    triggerSystemNotification(title, message);
+
+    const toastId = 'toast-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    setToasts(prev => [...prev, { id: toastId, title, message, type }]);
+
+    const newNotif: NotificationItem = {
+      id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      title,
+      message,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      type
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== toastId));
+    }, 6000);
+  };
+
+  // Request system notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        console.log('Native notification permission:', permission);
+      });
+    }
+  }, []);
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = localStorage.getItem('nt_settings');
     if (saved) {
@@ -242,6 +386,8 @@ export default function App() {
             if (cloudData.databaseRows) setDatabaseRows(cloudData.databaseRows);
             if (cloudData.activityRecaps) setActivityRecaps(cloudData.activityRecaps);
             if (cloudData.settings) setSettings(cloudData.settings);
+            if (cloudData.notifications) setNotifications(cloudData.notifications);
+            if (cloudData.notificationSettings) setNotificationSettings(cloudData.notificationSettings);
           } else if (res && !res.exists && !res.isOffline) {
             // First time cloud user - start with fresh, completely empty default structures
             const cleanPages: Page[] = [
@@ -305,12 +451,14 @@ export default function App() {
           trackingDays,
           databaseRows,
           activityRecaps,
-          settings
+          settings,
+          notifications,
+          notificationSettings
         });
       }, 1200);
       return () => clearTimeout(delayDebounce);
     }
-  }, [pages, habits, trackingDays, databaseRows, activityRecaps, settings, user, isDataLoadedFromCloud]);
+  }, [pages, habits, trackingDays, databaseRows, activityRecaps, settings, notifications, notificationSettings, user, isDataLoadedFromCloud]);
 
   // --- LOCAL STORAGE BACKUP EFFECTS ---
   useEffect(() => {
@@ -337,6 +485,18 @@ export default function App() {
     localStorage.setItem('nt_activity_recaps', JSON.stringify(activityRecaps));
   }, [activityRecaps]);
 
+  useEffect(() => {
+    localStorage.setItem('nt_notifications', JSON.stringify(notifications));
+  }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('nt_notification_settings', JSON.stringify(notificationSettings));
+  }, [notificationSettings]);
+
+  useEffect(() => {
+    localStorage.setItem('nt_triggered_alerts_today', JSON.stringify(triggeredAlertsToday));
+  }, [triggeredAlertsToday]);
+
   // Active page lookup helper
   const currentPage = pages.find(p => p.id === currentPageId) || pages[0] || INITIAL_PAGES[0];
 
@@ -358,6 +518,114 @@ export default function App() {
     notes: '',
     journalTitle: settings.language === 'id' ? 'Catatan Fokus Hari Ini' : "Today's Focus Log"
   } as TrackingDay;
+
+  // --- AUTOMATED NOTIFICATION SCHEDULE ENGINE ---
+  useEffect(() => {
+    const checkSchedule = () => {
+      const now = new Date();
+      const currentHours = String(now.getHours()).padStart(2, '0');
+      const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+      const timeStr = `${currentHours}:${currentMinutes}`;
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+
+      // 1. Daily Activity Logger Reminder Check
+      if (notificationSettings.enableDailyActivityReminder) {
+        const alertKey = `${todayStr}_activity`;
+        if (timeStr === notificationSettings.dailyActivityReminderTime && !triggeredAlertsToday[alertKey]) {
+          const todayActivities = activityRecaps[todayStr] || [];
+          const customActivitiesCount = todayActivities.filter(a => !a.isDefault).length;
+          
+          if (customActivitiesCount === 0) {
+            triggerToastNotification(
+              settings.language === 'id' ? 'Catat Aktivitas Hari Ini!' : 'Log Today\'s Activities!',
+              settings.language === 'id' 
+                ? 'Hai, Anda belum mencatat aktivitas apa pun hari ini. Klik "Recap View" untuk mencatat!'
+                : 'Hey, you haven\'t logged any activities or sleep session today. Click Recap View to update!',
+              'activity'
+            );
+            setTriggeredAlertsToday(prev => ({ ...prev, [alertKey]: true }));
+          }
+        }
+      }
+
+      // 2. Todo/Task Deadline Reminder Check
+      if (notificationSettings.enableTodoReminder) {
+        const alertKey = `${todayStr}_todo`;
+        if (timeStr === notificationSettings.todoReminderTime && !triggeredAlertsToday[alertKey]) {
+          const dueTasks = databaseRows.filter(row => 
+            row.dueDate === todayStr && 
+            row.status !== 'Completed'
+          );
+
+          if (dueTasks.length > 0) {
+            const taskTitles = dueTasks.map(t => t.title).join(', ');
+            triggerToastNotification(
+              settings.language === 'id' ? 'Tugas Jatuh Tempo Hari Ini!' : 'Tasks Due Today!',
+              settings.language === 'id'
+                ? `Tugas berikut harus diselesaikan hari ini: ${taskTitles}.`
+                : `The following tasks are due today: ${taskTitles}.`,
+              'todo'
+            );
+            setTriggeredAlertsToday(prev => ({ ...prev, [alertKey]: true }));
+          }
+        }
+      }
+
+      // 3. Habits Checklist Reminder Check
+      if (notificationSettings.enableHabitReminder) {
+        const alertKey = `${todayStr}_habit`;
+        if (timeStr === notificationSettings.habitReminderTime && !triggeredAlertsToday[alertKey]) {
+          const completedCount = todayTrackingData.habitsCompleted.length;
+          const totalCount = habits.length;
+
+          if (completedCount < totalCount) {
+            const incompleteCount = totalCount - completedCount;
+            triggerToastNotification(
+              settings.language === 'id' ? 'Lengkapi Kebiasaan Harian!' : 'Complete Your Habits!',
+              settings.language === 'id'
+                ? `Masih ada ${incompleteCount} kebiasaan belum selesai. Ayo pertahankan core harian Anda!`
+                : `You still have ${incompleteCount} incomplete habits today. Keep your daily streak going!`,
+              'habit'
+            );
+            setTriggeredAlertsToday(prev => ({ ...prev, [alertKey]: true }));
+          }
+        }
+      }
+    };
+
+    // Check immediately and then every 30 seconds
+    checkSchedule();
+    const interval = setInterval(checkSchedule, 30000);
+    return () => clearInterval(interval);
+  }, [notificationSettings, triggeredAlertsToday, databaseRows, activityRecaps, todayTrackingData, habits, settings.language]);
+
+  const handleTriggerSimulation = (type: 'todo' | 'habit' | 'activity') => {
+    if (type === 'activity') {
+      triggerToastNotification(
+        settings.language === 'id' ? 'Simulasi: Pengingat Aktivitas' : 'Simulation: Activity Reminder',
+        settings.language === 'id'
+          ? 'Hai! Ini adalah simulasi pengingat harian agar Anda tidak lupa mencatat waktu tidur dan log kegiatan hari ini.'
+          : 'Hi! This is a simulation reminder to log your daily activities and sleep times today to preserve records.',
+        'activity'
+      );
+    } else if (type === 'todo') {
+      triggerToastNotification(
+        settings.language === 'id' ? 'Simulasi: Pengingat Tugas' : 'Simulation: Task Reminder',
+        settings.language === 'id'
+          ? 'Tugas penting dideteksi mendekati batas waktu hari ini. Jangan lupa selesaikan!'
+          : 'Crucial tasks are detected approaching their due dates today. Remember to mark as Completed!',
+        'todo'
+      );
+    } else if (type === 'habit') {
+      triggerToastNotification(
+        settings.language === 'id' ? 'Simulasi: Pengingat Kebiasaan' : 'Simulation: Habit Streak Alert',
+        settings.language === 'id'
+          ? 'Selesaikan semua kebiasaan harian Anda sebelum hari berakhir untuk mempertahankan core streak!'
+          : 'Complete all your daily habits before the day ends to preserve your streak!',
+        'habit'
+      );
+    }
+  };
 
   // --- COMPONENT HANDLERS ---
 
@@ -828,8 +1096,20 @@ export default function App() {
                 placeholder="Judul Halaman Baru..."
               />
               
-              {/* Meta actions (Favorites, configuration etc.) */}
+              {/* Meta actions (Favorites, configuration, notifications etc.) */}
               <div className="flex items-center gap-1.5 shrink-0 bg-[#F1F1F1] p-1 rounded-md border border-[#EBEBEB] w-fit">
+                <NotificationCenter
+                  notifications={notifications}
+                  unreadCount={notifications.filter(n => !n.isRead).length}
+                  settings={notificationSettings}
+                  onUpdateSettings={setNotificationSettings}
+                  onMarkAsRead={(id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n))}
+                  onMarkAllAsRead={() => setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))}
+                  onClearAll={() => setNotifications([])}
+                  onTriggerSimulation={handleTriggerSimulation}
+                  language={settings.language}
+                />
+
                 <button
                   id="btn-header-favorite"
                   onClick={() => handleToggleFavoritePage(currentPage.id)}
@@ -1652,6 +1932,58 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Toast Notifications Floating Overlay */}
+      <div className="fixed top-6 right-6 z-100 pointer-events-none space-y-2 max-w-sm w-full font-sans">
+        <AnimatePresence>
+          {toasts.map((toast) => (
+            <motion.div
+              key={toast.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              className="pointer-events-auto w-full bg-white border border-neutral-150 rounded-xl shadow-[0_8px_24px_rgba(15,15,15,0.08)] p-3.5 flex items-start gap-3 relative overflow-hidden"
+            >
+              {/* Colored side indicator bar */}
+              <div className={`absolute left-0 top-0 bottom-0 w-1 ${
+                toast.type === 'todo' ? 'bg-indigo-500' :
+                toast.type === 'habit' ? 'bg-emerald-500' :
+                toast.type === 'activity' ? 'bg-amber-500' : 'bg-purple-500'
+              }`} />
+
+              <div className="flex-1 pl-1">
+                <h4 className="text-xs font-black text-neutral-800 tracking-tight leading-tight">
+                  {toast.title}
+                </h4>
+                <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">
+                  {toast.message}
+                </p>
+              </div>
+
+              <button
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="text-neutral-400 hover:text-neutral-650 p-0.5 rounded-lg hover:bg-neutral-50 shrink-0 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      <AiAssistant 
+        settings={settings}
+        habits={habits}
+        todayTrackingData={todayTrackingData}
+        databaseRows={databaseRows}
+        activePageTitle={currentPage?.title}
+        onToggleTodayHabit={handleToggleTodayHabit}
+        onUpdateTrackingDay={handleUpdateTrackingDay}
+        onUpdateDatabaseRows={setDatabaseRows}
+        onUpdateActivitiesForDate={handleUpdateActivitiesForDate}
+        activityRecaps={activityRecaps}
+        onAddNotification={triggerToastNotification}
+      />
 
       <SettingsModal
         isOpen={showSettingsModal}

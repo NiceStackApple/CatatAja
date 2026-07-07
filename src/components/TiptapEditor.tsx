@@ -219,13 +219,8 @@ export const TiptapEditor: React.FC<TiptapEditorProps> = ({
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Editor Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        <EditorContent editor={editor} />
-      </div>
-
-      {/* Embedded Floating Rich WYSIWYG Format Popover */}
-      <div className="flex justify-start w-full mt-3 select-none relative" ref={dropdownRef}>
+      {/* Embedded Floating Rich WYSIWYG Format Popover (At the TOP to open downwards) */}
+      <div className="flex justify-start w-full mb-3 select-none relative z-55" ref={dropdownRef}>
         <button
           type="button"
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -242,7 +237,7 @@ export const TiptapEditor: React.FC<TiptapEditorProps> = ({
         </button>
 
         {isDropdownOpen && (
-          <div className="absolute bottom-10 left-0 z-50 w-60 bg-white border border-neutral-200 shadow-lg rounded-xl py-1 animate-in fade-in slide-in-from-bottom-2 duration-150 max-h-[300px] overflow-y-auto">
+          <div className="absolute top-full mt-1.5 left-0 z-55 w-60 bg-white border border-neutral-200 shadow-lg rounded-xl py-1 animate-in fade-in slide-in-from-top-2 duration-150 max-h-[300px] overflow-y-auto">
             {/* Group 1: Typography styles */}
             <div className="px-2.5 py-1 text-[10px] font-bold text-neutral-400 uppercase tracking-wider select-none">
               Judul & Teks
@@ -505,6 +500,11 @@ export const TiptapEditor: React.FC<TiptapEditorProps> = ({
             </button>
           </div>
         )}
+      </div>
+
+      {/* Editor Content Area (Placed below the formatting toolbar so popover drops downwards over it) */}
+      <div className="flex-1 overflow-y-auto mt-1 min-h-[220px]">
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
