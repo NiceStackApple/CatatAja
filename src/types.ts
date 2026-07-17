@@ -7,9 +7,10 @@ export interface Block {
   tableData?: BlankTableData; // For table block type
   chartData?: BlankChartData; // For chart block type
   bridgeData?: BlankBridgeData; // For bridge/page-link block type
+  indent?: number; // Indentation level
 }
 
-export type PageType = 'tracker' | 'calendar' | 'analytics' | 'notes' | 'database' | 'blank' | 'recap' | 'telegram';
+export type PageType = 'tracker' | 'calendar' | 'analytics' | 'notes' | 'database' | 'blank' | 'recap' | 'telegram' | 'keep';
 
 export interface BlankTableData {
   headers: string[];
@@ -38,6 +39,15 @@ export interface BlankWidget {
   width?: 'full' | 'half';
 }
 
+export interface KeepNote {
+  id: string;
+  title: string;
+  blocks: Block[];
+  isPinned: boolean;
+  color?: string; // Tailwind background class or custom hex / color name
+  createdAt: string;
+}
+
 export interface Page {
   id: string;
   title: string;
@@ -47,6 +57,7 @@ export interface Page {
   isFavorite: boolean;
   blocks?: Block[]; // Holds notes blocks for 'notes' type
   blankWidgets?: BlankWidget[]; // Holds custom builder widgets for 'blank' type
+  keepNotes?: KeepNote[]; // Holds google keep notes
   createdAt: string;
 }
 

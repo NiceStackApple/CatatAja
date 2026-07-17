@@ -253,55 +253,55 @@ export default function SettingsModal({
       {/* Modal Card */}
       <div 
         id="settings-dialog"
-        className="relative bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl w-full max-w-2xl h-[520px] max-h-[90vh] flex overflow-hidden z-10 text-neutral-800 dark:text-neutral-200"
+        className="relative bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl shadow-2xl w-full max-w-2xl h-[580px] sm:h-[520px] max-h-[90vh] flex flex-col sm:flex-row overflow-hidden z-10 text-neutral-800 dark:text-neutral-200"
       >
         {/* Left Navigation Sidebar */}
-        <div className="w-48 bg-neutral-50 dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800 p-3 flex flex-col justify-between shrink-0 select-none">
-          <div>
-            <div className="px-3 py-2 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+        <div className="w-full sm:w-48 bg-neutral-50 dark:bg-neutral-950 border-b sm:border-b-0 sm:border-r border-neutral-200 dark:border-neutral-800 p-2 sm:p-3 flex flex-row sm:flex-col justify-between shrink-0 select-none overflow-x-auto">
+          <div className="flex sm:flex-col items-center sm:items-stretch gap-1 sm:gap-0 w-full">
+            <div className="hidden sm:block px-3 py-2 text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
               {t('Pengaturan', 'Settings')}
             </div>
             
-            <nav className="space-y-1 mt-2">
+            <nav className="flex sm:flex-col gap-1 w-full">
               <button
                 onClick={() => setActiveTab('profile')}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex-1 sm:w-full flex items-center justify-center sm:justify-start gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-medium transition-all ${
                   activeTab === 'profile'
-                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs'
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs font-semibold'
                     : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-900 dark:hover:text-white'
                 }`}
               >
-                <User className="w-3.5 h-3.5" />
-                <span>{t('Profil Saya', 'My Profile')}</span>
+                <User className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('Profil', 'Profile')}</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('notifications')}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex-1 sm:w-full flex items-center justify-center sm:justify-start gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-medium transition-all ${
                   activeTab === 'notifications'
-                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs'
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs font-semibold'
                     : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-900 dark:hover:text-white'
                 }`}
               >
-                <Bell className="w-3.5 h-3.5" />
+                <Bell className="w-3.5 h-3.5 shrink-0" />
                 <span>{t('Notifikasi', 'Notifications')}</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('data')}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                className={`flex-1 sm:w-full flex items-center justify-center sm:justify-start gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs font-medium transition-all ${
                   activeTab === 'data'
-                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs'
+                    ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-900 dark:text-white shadow-xs font-semibold'
                     : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-neutral-900 dark:hover:text-white'
                 }`}
               >
-                <Database className="w-3.5 h-3.5" />
-                <span>{t('Kelola Data', 'Data Control')}</span>
+                <Database className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('Data', 'Data')}</span>
               </button>
             </nav>
           </div>
 
-          <div className="p-3 text-[10px] text-neutral-400 border-t border-neutral-100 dark:border-neutral-800">
+          <div className="hidden sm:block p-3 text-[10px] text-neutral-400 border-t border-neutral-100 dark:border-neutral-800">
             <div>Ruang Tsaqif v1.2</div>
             <div className="mt-0.5 text-neutral-500">Cloud Connected</div>
           </div>

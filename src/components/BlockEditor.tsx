@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -21,10 +21,100 @@ import {
   Settings,
   ArrowRight,
   Sparkles,
-  Columns
+  Columns,
+  ChevronUp,
+  ChevronDown,
+  Check,
+  Indent,
+  Outdent,
+  Bold,
+  Italic,
+  Underline
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Block, Page, Habit, TrackingDay, DatabaseRow } from '../types';
+
+// Helpers for inline Rich Text
+export const isHtmlEmpty = (html: string) => {
+  if (!html) return true;
+  const clean = html.replace(/<[^>]*>/g, '').trim();
+  return clean === '';
+};
+
+export const formatBlockContent = (content: string) => {
+  if (!content) return '';
+  let html = content;
+  // Convert markdown bold to HTML <b> for backward compatibility
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  // Convert markdown italic to HTML <i> for backward compatibility
+  html = html.replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  // Convert markdown underline to HTML <u> for backward compatibility
+  html = html.replace(/__([^_]+)__/g, '<u>$1</u>');
+  return html;
+};
+
+interface ContentEditableBlockProps {
+  id: string;
+  value: string;
+  onChange: (val: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  className?: string;
+}
+
+export const ContentEditableBlock: React.FC<ContentEditableBlockProps> = ({
+  id,
+  value,
+  onChange,
+  onKeyDown,
+  onFocus,
+  onBlur,
+  placeholder,
+  className
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      const currentHTML = ref.current.innerHTML;
+      if (value === '' && (currentHTML === '<br>' || currentHTML === '<div><br></div>' || currentHTML === '<p><br></p>')) {
+        return;
+      }
+      ref.current.innerHTML = value;
+    }
+  }, [value]);
+
+  const handleInput = () => {
+    if (ref.current) {
+      let html = ref.current.innerHTML;
+      if (html === '<br>' || html === '<div><br></div>' || html === '<p><br></p>') {
+        html = '';
+      }
+      onChange(html);
+    }
+  };
+
+  return (
+    <div
+      ref={ref}
+      id={id}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={handleInput}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      className={`${className} outline-hidden focus:outline-hidden min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400 empty:before:pointer-events-none empty:before:opacity-60`}
+      data-placeholder={placeholder}
+      style={{
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}
+    />
+  );
+};
 
 interface BlockEditorProps {
   blocks: Block[];
@@ -53,14 +143,151 @@ export default function BlockEditor({
   const [deleteConfirmBlockType, setDeleteConfirmBlockType] = useState<string>('');
   const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null);
 
-  // Close block menu popover when clicking anywhere outside
+  // Mobile focused block states
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const lastEditorSelectionRef = useRef<{ start: number; end: number; blockId: string | null }>({ start: 0, end: 0, blockId: null });
+  const [pendingFocusBlockId, setPendingFocusBlockId] = useState<string | null>(null);
+  const [activeToolbarPanel, setActiveToolbarPanel] = useState<'type-changer' | 'add-line' | null>(null);
+
+  // Auto-close sub-panel when block focus changes
+  useEffect(() => {
+    setActiveToolbarPanel(null);
+  }, [focusedBlockId]);
+
+  // App Language helper for translation
+  const getAppLanguage = (): 'id' | 'en' => {
+    try {
+      const raw = localStorage.getItem('nt_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.language) {
+          return parsed.language;
+        }
+      }
+    } catch (e) {}
+    return 'en';
+  };
+
+  const isId = getAppLanguage() === 'id';
+  const t = (idText: string, enText: string) => {
+    return isId ? idText : enText;
+  };
+
+  // Switch block type directly
+  const changeBlockType = (id: string, type: Block['type']) => {
+    let tableData;
+    let chartData;
+    let bridgeData;
+
+    if (type === 'table') {
+      tableData = {
+        headers: ['Target', 'Metrik', 'Status'],
+        rows: [
+          { 'Target': 'Mulai Rutinitas', 'Metrik': '100%', 'Status': 'Selesai' },
+          { 'Target': 'Review Progress', 'Metrik': '80%', 'Status': 'Berjalan' }
+        ]
+      };
+    } else if (type === 'chart') {
+      chartData = {
+        title: 'Manajer Produktivitas',
+        chartType: 'bar' as const,
+        metrics: [
+          { label: 'Sen', value: 20 },
+          { label: 'Sel', value: 45 },
+          { label: 'Rab', value: 28 },
+          { label: 'Kam', value: 80 },
+          { label: 'Jum', value: 35 }
+        ]
+      };
+    } else if (type === 'bridge') {
+      const otherPage = pages.find(p => p.type !== 'notes' && p.type !== 'blank');
+      bridgeData = {
+        targetPageId: otherPage?.id || pages[0]?.id || '',
+        displayMode: 'summary' as const
+      };
+    }
+
+    const updatedBlocks = blocks.map(b => {
+      if (b.id === id) {
+        return {
+          ...b,
+          type,
+          tableData,
+          chartData,
+          bridgeData,
+          icon: type === 'callout' ? (b.icon || '💡') : undefined
+        } as Block;
+      }
+      return b;
+    });
+    onChangeBlocks(updatedBlocks);
+  };
+
+  // Move block up
+  const moveBlockUp = (id: string) => {
+    const index = blocks.findIndex(b => b.id === id);
+    if (index > 0) {
+      const updatedBlocks = [...blocks];
+      const [block] = updatedBlocks.splice(index, 1);
+      updatedBlocks.splice(index - 1, 0, block);
+      onChangeBlocks(updatedBlocks);
+    }
+  };
+
+  // Move block down
+  const moveBlockDown = (id: string) => {
+    const index = blocks.findIndex(b => b.id === id);
+    if (index !== -1 && index < blocks.length - 1) {
+      const updatedBlocks = [...blocks];
+      const [block] = updatedBlocks.splice(index, 1);
+      updatedBlocks.splice(index + 1, 0, block);
+      onChangeBlocks(updatedBlocks);
+    }
+  };
+
+  // Indent block right
+  const indentBlockRight = (id: string) => {
+    const updatedBlocks = blocks.map(b => {
+      if (b.id === id) {
+        const currentIndent = b.indent ?? 0;
+        return { ...b, indent: Math.min(currentIndent + 1, 5) };
+      }
+      return b;
+    });
+    onChangeBlocks(updatedBlocks);
+  };
+
+  // Indent block left
+  const indentBlockLeft = (id: string) => {
+    const updatedBlocks = blocks.map(b => {
+      if (b.id === id) {
+        const currentIndent = b.indent ?? 0;
+        return { ...b, indent: Math.max(currentIndent - 1, 0) };
+      }
+      return b;
+    });
+    onChangeBlocks(updatedBlocks);
+  };
+
+  // Close block menu popover and clear mobile focus when clicking anywhere outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
+      const target = event.target as HTMLElement;
       if (activeMenuBlockId) {
-        const target = event.target as HTMLElement;
         if (!target.closest('.block-menu-popover') && !target.closest('.block-menu-trigger')) {
           setActiveMenuBlockId(null);
         }
+      }
+
+      // Dismiss mobile keyboard toolbar if clicking completely outside
+      if (
+        !target.closest('[id^="block-wrapper-"]') && 
+        !target.closest('#mobile-keyboard-toolbar') &&
+        !target.closest('.block-menu-popover') &&
+        !target.closest('.block-menu-trigger') &&
+        !target.closest('#btn-block-add-bottom')
+      ) {
+        setFocusedBlockId(null);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -71,10 +298,57 @@ export default function BlockEditor({
     };
   }, [activeMenuBlockId]);
 
+  // Autofocus newly created blocks on mobile / desktop
+  useEffect(() => {
+    if (pendingFocusBlockId) {
+      const targetInput = document.querySelector(
+        `[id^="block-input-h1-${pendingFocusBlockId}"], [id^="block-input-h2-${pendingFocusBlockId}"], [id^="block-input-h3-${pendingFocusBlockId}"], [id^="block-input-p-${pendingFocusBlockId}"], [id^="block-input-todo-${pendingFocusBlockId}"], [id^="block-input-bullet-${pendingFocusBlockId}"], [id^="block-input-callout-${pendingFocusBlockId}"], [id^="block-input-quote-${pendingFocusBlockId}"]`
+      ) as HTMLElement | null;
+
+      if (targetInput) {
+        targetInput.focus();
+        // Move selection to end of contentEditable div
+        if (typeof window.getSelection !== 'undefined' && typeof document.createRange !== 'undefined') {
+          const range = document.createRange();
+          range.selectNodeContents(targetInput);
+          range.collapse(false);
+          const selection = window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }
+      }
+      setPendingFocusBlockId(null);
+    }
+  }, [pendingFocusBlockId]);
+
   // Update text content / generic payload of a block
   const handleBlockChange = (id: string, updatedFields: Partial<Block>) => {
     const updatedBlocks = blocks.map(b => b.id === id ? { ...b, ...updatedFields } as Block : b);
     onChangeBlocks(updatedBlocks);
+  };
+
+  const applyTextFormattingToEditorBlock = (formatType: 'bold' | 'italic' | 'underline') => {
+    document.execCommand(formatType, false);
+  };
+
+  const handleKeyDownShortcuts = (e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLTextAreaElement>, blockId: string) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      applyTextFormattingToEditorBlock('bold');
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+      e.preventDefault();
+      applyTextFormattingToEditorBlock('italic');
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
+      e.preventDefault();
+      applyTextFormattingToEditorBlock('underline');
+    }
+  };
+
+  const handleSelectionUpdate = (e: React.SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>, blockId: string) => {
+    const target = e.target as HTMLInputElement | HTMLTextAreaElement;
+    lastEditorSelectionRef.current = { start: target.selectionStart ?? 0, end: target.selectionEnd ?? 0, blockId };
   };
 
   // Toggle todo check state
@@ -120,8 +394,9 @@ export default function BlockEditor({
       };
     }
 
+    const newBlockId = `blk-${Date.now()}`;
     const newBlock: Block = {
-      id: `blk-${Date.now()}`,
+      id: newBlockId,
       type,
       content: '',
       isCompleted: false,
@@ -140,6 +415,8 @@ export default function BlockEditor({
     }
     onChangeBlocks(updatedBlocks);
     setActiveMenuBlockId(null);
+    setFocusedBlockId(newBlockId);
+    setPendingFocusBlockId(newBlockId);
   };
 
   // Delete block
@@ -297,7 +574,9 @@ export default function BlockEditor({
               onDragOver={(e) => handleDragOver(e, index)}
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
-              className={`group relative flex flex-col pl-1 pr-1.5 py-1 rounded hover:bg-[#F7F7F5] transition-colors ${
+              onClick={() => setFocusedBlockId(block.id)}
+              onFocusCapture={() => setFocusedBlockId(block.id)}
+              className={`group relative flex flex-col px-4 sm:pl-1 sm:pr-1.5 py-1 rounded hover:bg-[#F7F7F5] dark:hover:bg-neutral-800/30 transition-colors ${
                 draggedIndex === index ? 'opacity-30' : ''
               }`}
             >
@@ -313,7 +592,7 @@ export default function BlockEditor({
               {/* Main row layout */}
               <div className="flex items-start gap-1">
                 {/* Left Action Gutter (Drag Handle and Plus Insert button) */}
-                <div className="flex items-center gap-0.5 shrink-0 w-14 justify-end opacity-0 group-hover:opacity-100 transition-opacity self-center mr-1 pb-0.5">
+                <div className="hidden sm:flex items-center gap-0.5 shrink-0 w-14 justify-end opacity-0 group-hover:opacity-100 transition-opacity self-center mr-1 pb-0.5">
                   {/* Drag Handle */}
                   <div
                     id={`btn-block-drag-handle-${block.id}`}
@@ -340,65 +619,106 @@ export default function BlockEditor({
                     id={`btn-block-add-menu-${block.id}`}
                     onClick={() => setActiveMenuBlockId(activeMenuBlockId === block.id ? null : block.id)}
                     className="block-menu-trigger p-1 rounded text-[#787774] hover:text-[#37352F] hover:bg-[#EDEDED] cursor-pointer"
-                    title="Add Block After This"
+                    title="text formater"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
                 {/* Specific Block Layouts (Middle Column) */}
-                <div className="flex-1 min-w-0">
+                <div 
+                  className="flex-1 min-w-0"
+                  style={{ paddingLeft: block.indent ? `${block.indent * 18}px` : undefined }}
+                >
                   {block.type === 'h1' && (
-                    <input
+                    <ContentEditableBlock
                       id={`block-input-h1-${block.id}`}
-                      type="text"
                       value={block.content}
-                      onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                      onChange={(val) => handleBlockChange(block.id, { content: val })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const idx = blocks.findIndex(b => b.id === block.id);
+                          addBlock('paragraph', idx);
+                        } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                          e.preventDefault();
+                          deleteBlock(block.id);
+                        } else {
+                          handleKeyDownShortcuts(e, block.id);
+                        }
+                      }}
+                      onFocus={() => setFocusedBlockId(block.id)}
                       placeholder={getPlaceholderFor('h1')}
                       className="w-full text-xl font-bold font-sans text-[#37352F] tracking-tight py-1 bg-transparent border-none outline-hidden"
                     />
                   )}
 
                   {block.type === 'h2' && (
-                    <input
+                    <ContentEditableBlock
                       id={`block-input-h2-${block.id}`}
-                      type="text"
                       value={block.content}
-                      onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                      onChange={(val) => handleBlockChange(block.id, { content: val })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const idx = blocks.findIndex(b => b.id === block.id);
+                          addBlock('paragraph', idx);
+                        } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                          e.preventDefault();
+                          deleteBlock(block.id);
+                        } else {
+                          handleKeyDownShortcuts(e, block.id);
+                        }
+                      }}
+                      onFocus={() => setFocusedBlockId(block.id)}
                       placeholder={getPlaceholderFor('h2')}
                       className="w-full text-lg font-semibold font-sans text-[#37352F] tracking-tight py-1 bg-transparent border-none outline-hidden"
                     />
                   )}
 
                   {block.type === 'h3' && (
-                    <input
+                    <ContentEditableBlock
                       id={`block-input-h3-${block.id}`}
-                      type="text"
                       value={block.content}
-                      onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                      onChange={(val) => handleBlockChange(block.id, { content: val })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const idx = blocks.findIndex(b => b.id === block.id);
+                          addBlock('paragraph', idx);
+                        } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                          e.preventDefault();
+                          deleteBlock(block.id);
+                        } else {
+                          handleKeyDownShortcuts(e, block.id);
+                        }
+                      }}
+                      onFocus={() => setFocusedBlockId(block.id)}
                       placeholder={getPlaceholderFor('h3')}
                       className="w-full text-base font-medium font-sans text-[#37352F] py-0.5 bg-transparent border-none outline-hidden"
                     />
                   )}
 
                   {block.type === 'paragraph' && (
-                    <textarea
+                    <ContentEditableBlock
                       id={`block-input-p-${block.id}`}
                       value={block.content}
-                      onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                      onChange={(val) => handleBlockChange(block.id, { content: val })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const idx = blocks.findIndex(b => b.id === block.id);
+                          addBlock('paragraph', idx);
+                        } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                          e.preventDefault();
+                          deleteBlock(block.id);
+                        } else {
+                          handleKeyDownShortcuts(e, block.id);
+                        }
+                      }}
+                      onFocus={() => setFocusedBlockId(block.id)}
                       placeholder={getPlaceholderFor('paragraph')}
-                      rows={1}
-                      className="w-full py-0.5 text-sm text-[#37352F] bg-transparent border-none outline-hidden resize-none leading-relaxed"
-                      onInput={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = target.scrollHeight + 'px';
-                      }}
-                      onFocus={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = target.scrollHeight + 'px';
-                      }}
+                      className="w-full py-0.5 text-sm text-[#37352F] bg-transparent border-none outline-hidden leading-relaxed"
                     />
                   )}
 
@@ -415,11 +735,23 @@ export default function BlockEditor({
                       >
                         {block.isCompleted && <span className="text-[10px] leading-none font-bold">✓</span>}
                       </button>
-                      <input
+                      <ContentEditableBlock
                         id={`block-input-todo-${block.id}`}
-                        type="text"
                         value={block.content}
-                        onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                        onChange={(val) => handleBlockChange(block.id, { content: val })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const idx = blocks.findIndex(b => b.id === block.id);
+                            addBlock('todo', idx);
+                          } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                            e.preventDefault();
+                            deleteBlock(block.id);
+                          } else {
+                            handleKeyDownShortcuts(e, block.id);
+                          }
+                        }}
+                        onFocus={() => setFocusedBlockId(block.id)}
                         placeholder={getPlaceholderFor('todo')}
                         className={`w-full text-sm text-[#37352F] bg-transparent border-none outline-hidden ${
                           block.isCompleted ? 'line-through text-[#787774]' : ''
@@ -431,11 +763,23 @@ export default function BlockEditor({
                   {block.type === 'bullet' && (
                     <div className="flex items-start gap-2 py-0.5">
                       <span className="text-[#787774] select-none mr-1.5 mt-0.5 shrink-0">•</span>
-                      <input
+                      <ContentEditableBlock
                         id={`block-input-bullet-${block.id}`}
-                        type="text"
                         value={block.content}
-                        onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
+                        onChange={(val) => handleBlockChange(block.id, { content: val })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const idx = blocks.findIndex(b => b.id === block.id);
+                            addBlock('bullet', idx);
+                          } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                            e.preventDefault();
+                            deleteBlock(block.id);
+                          } else {
+                            handleKeyDownShortcuts(e, block.id);
+                          }
+                        }}
+                        onFocus={() => setFocusedBlockId(block.id)}
                         placeholder={getPlaceholderFor('bullet')}
                         className="w-full text-sm text-[#37352F] bg-transparent border-none outline-hidden"
                       />
@@ -445,36 +789,50 @@ export default function BlockEditor({
                   {block.type === 'callout' && (
                     <div className="flex items-start gap-2.5 bg-[#F1F1EF] border border-[#EBEBEB] p-3 rounded my-1">
                       <div className="text-base shrink-0 select-none">{block.icon}</div>
-                      <textarea
+                      <ContentEditableBlock
                         id={`block-input-callout-${block.id}`}
                         value={block.content}
-                        onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
-                        placeholder={getPlaceholderFor('callout')}
-                        rows={1}
-                        className="w-full text-sm text-[#37352F] bg-transparent border-none outline-hidden resize-none leading-relaxed"
-                        onInput={(e) => {
-                          const target = e.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = target.scrollHeight + 'px';
+                        onChange={(val) => handleBlockChange(block.id, { content: val })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const idx = blocks.findIndex(b => b.id === block.id);
+                            addBlock('paragraph', idx);
+                          } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                            e.preventDefault();
+                            deleteBlock(block.id);
+                          } else {
+                            handleKeyDownShortcuts(e, block.id);
+                          }
                         }}
+                        onFocus={() => setFocusedBlockId(block.id)}
+                        placeholder={getPlaceholderFor('callout')}
+                        className="w-full text-sm text-[#37352F] bg-transparent border-none outline-hidden leading-relaxed"
                       />
                     </div>
                   )}
 
                   {block.type === 'quote' && (
                     <div className="border-l-3 border-[#37352F] pl-3 py-0.5 my-1">
-                      <textarea
+                      <ContentEditableBlock
                         id={`block-input-quote-${block.id}`}
                         value={block.content}
-                        onChange={(e) => handleBlockChange(block.id, { content: e.target.value })}
-                        placeholder={getPlaceholderFor('quote')}
-                        rows={1}
-                        className="w-full text-sm font-medium italic text-[#787774] bg-transparent border-none outline-hidden resize-none leading-relaxed"
-                        onInput={(e) => {
-                          const target = e.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = target.scrollHeight + 'px';
+                        onChange={(val) => handleBlockChange(block.id, { content: val })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const idx = blocks.findIndex(b => b.id === block.id);
+                            addBlock('paragraph', idx);
+                          } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                            e.preventDefault();
+                            deleteBlock(block.id);
+                          } else {
+                            handleKeyDownShortcuts(e, block.id);
+                          }
                         }}
+                        onFocus={() => setFocusedBlockId(block.id)}
+                        placeholder={getPlaceholderFor('quote')}
+                        className="w-full text-sm font-medium italic text-[#787774] bg-transparent border-none outline-hidden leading-relaxed"
                       />
                     </div>
                   )}
@@ -984,7 +1342,7 @@ export default function BlockEditor({
                 </div>
 
                 {/* Right Action Gutter (Delete Button) */}
-                <div className="flex items-center shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity ml-1 pl-1">
+                <div className="hidden sm:flex items-center shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity ml-1 pl-1">
                   <button
                     id={`btn-block-delete-${block.id}`}
                     onClick={(e) => {
@@ -1010,80 +1368,78 @@ export default function BlockEditor({
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 5 }}
-                    className="block-menu-popover absolute left-10 top-9 z-30 bg-white border border-[#EBEBEB] rounded-lg shadow-xl p-1.5 w-72 text-xs text-[#37352F]"
+                    className="block-menu-popover absolute left-10 top-9 z-30 bg-white dark:bg-neutral-800 border border-[#EBEBEB] dark:border-neutral-700 rounded-xl shadow-xl p-1.5 flex flex-row items-center gap-1 select-none min-w-[360px]"
                   >
-                      {/* DASAR MENU */}
-                      <div className="px-2 py-1 text-[9px] font-bold text-[#787774] uppercase tracking-wider border-b border-[#EBEBEB]">
-                        Blok Umum (Teks & List)
-                      </div>
-                      <div className="grid grid-cols-2 gap-1 py-1">
+                    {[
+                      { type: 'paragraph', icon: <Type className="w-3.5 h-3.5 text-neutral-500" />, label: 'Paragraf' },
+                      { type: 'todo', icon: <CheckSquare className="w-3.5 h-3.5 text-blue-500" />, label: 'Tugas (To-Do)' },
+                      { type: 'h1', icon: <Heading1 className="w-3.5 h-3.5 text-neutral-800 dark:text-neutral-200 font-bold" />, label: 'Judul Utama' },
+                      { type: 'h2', icon: <Heading2 className="w-3.5 h-3.5 text-neutral-700 dark:text-neutral-300 font-bold" />, label: 'Subjudul' },
+                      { type: 'bullet', icon: <List className="w-3.5 h-3.5 text-amber-600" />, label: 'Poin Bulatan' },
+                      { type: 'table', icon: <TableIcon className="w-3.5 h-3.5 text-[#337EA9]" />, label: 'Tabel Dinamis' },
+                    ].map((item) => {
+                      const isCurrent = block.type === item.type;
+                      return (
                         <button
-                          onClick={() => addBlock('paragraph', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
+                          key={item.type}
+                          type="button"
+                          onClick={() => {
+                            if (item.type === 'table') {
+                              // Special case for adding table block
+                              addBlock('table', index);
+                            } else {
+                              changeBlockType(block.id, item.type as any);
+                            }
+                            setActiveMenuBlockId(null);
+                          }}
+                          className={`p-1.5 rounded-md transition-all cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700 flex items-center justify-center shrink-0 ${
+                            isCurrent ? 'bg-[#337EA9]/10 text-[#337EA9]' : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                          }`}
+                          title={item.label}
                         >
-                          <Type className="w-3.5 h-3.5 text-slate-500" /> Paragraf
+                          {item.icon}
                         </button>
-                        <button
-                          onClick={() => addBlock('todo', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <CheckSquare className="w-3.5 h-3.5 text-blue-500" /> Tugas (To-Do)
-                        </button>
-                        <button
-                          onClick={() => addBlock('h1', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <Heading1 className="w-3.5 h-3.5 text-neutral-800" /> Judul Utama
-                        </button>
-                        <button
-                          onClick={() => addBlock('h2', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <Heading2 className="w-3.5 h-3.5 text-neutral-800" /> Subjudul
-                        </button>
-                        <button
-                          onClick={() => addBlock('bullet', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <List className="w-3.5 h-3.5 text-yellow-600" /> Poin Bulatan
-                        </button>
-                        <button
-                          onClick={() => addBlock('callout', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <AlertCircle className="w-3.5 h-3.5 text-emerald-500" /> Kotak Info
-                        </button>
-                        <button
-                          onClick={() => addBlock('quote', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <Quote className="w-3.5 h-3.5 text-indigo-500" /> Kutipan
-                        </button>
-                        <button
-                          onClick={() => addBlock('divider', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-[#F7F7F5] rounded text-left cursor-pointer transition-colors"
-                        >
-                          <Minus className="w-3.5 h-3.5 text-gray-400" /> Garis Pemisah
-                        </button>
-                      </div>
+                      );
+                    })}
 
-                      {/* ADD-ONS INTERAKTIF MENU */}
-                      <div className="px-2 py-1 mt-1 text-[9px] font-bold text-pink-600 uppercase tracking-widest border-t border-b border-pink-50 bg-pink-50/20">
-                        ✨ Add-ons / Elemen Kustom
-                      </div>
-                      <div className="grid grid-cols-1 gap-1 py-1">
-                        <button
-                          onClick={() => addBlock('table', index)}
-                          className="flex items-center gap-2 p-1.5 hover:bg-pink-50/50 rounded text-left text-neutral-800 font-bold tracking-tight cursor-pointer transition-colors"
-                        >
-                          <TableIcon className="w-4 h-4 text-blue-500" /> Tabel Dinamis
-                        </button>
-                      </div>
+                    {/* Divider line before text formats */}
+                    <div className="h-4 w-[1px] bg-neutral-250 dark:bg-neutral-700 mx-1 shrink-0" />
 
-                      <div className="text-[10px] text-center text-neutral-400 pt-1.5 border-t select-none">
-                        Klik di luar untuk menutup menu ini
-                      </div>
-                    </motion.div>
+                    {/* Bold, Italic, Underline buttons */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('bold');
+                        setActiveMenuBlockId(null);
+                      }}
+                      className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                      title="Bold"
+                    >
+                      <Bold className="w-3.5 h-3.5 font-bold" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('italic');
+                        setActiveMenuBlockId(null);
+                      }}
+                      className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                      title="Italic"
+                    >
+                      <Italic className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('underline');
+                        setActiveMenuBlockId(null);
+                      }}
+                      className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                      title="Underline"
+                    >
+                      <Underline className="w-3.5 h-3.5" />
+                    </button>
+                  </motion.div>
                 )}
               </AnimatePresence>
             </div>
@@ -1149,6 +1505,213 @@ export default function BlockEditor({
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Keyboard Toolbar */}
+      <AnimatePresence>
+        {focusedBlockId && (
+          <motion.div
+            id="mobile-keyboard-toolbar"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-t border-[#EBEBEB] dark:border-neutral-800 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] px-3 py-2 flex flex-col gap-2 pb-5"
+          >
+            {activeToolbarPanel ? (
+              /* Sub-panel Menu (Grid layout matching user's image) */
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between px-2 pb-1 border-b border-neutral-100 dark:border-neutral-800">
+                  <span className="text-[11px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">
+                    {activeToolbarPanel === 'type-changer' 
+                      ? t('Ubah Jenis & Format', 'Convert & Format Block') 
+                      : t('Tambah Blok di Bawah', 'Insert Block Below')}
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => setActiveToolbarPanel(null)} 
+                    className="px-2 py-0.5 text-xs text-[#337EA9] hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded font-bold cursor-pointer transition-colors"
+                  >
+                    {t('Batal', 'Cancel')}
+                  </button>
+                </div>
+
+                {activeToolbarPanel === 'type-changer' && (
+                  <div className="flex items-center gap-1.5 px-1 pb-2 border-b border-neutral-100 dark:border-neutral-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('bold');
+                        setActiveToolbarPanel(null);
+                      }}
+                      className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                    >
+                      <Bold className="w-3.5 h-3.5 font-bold" />
+                      <span>{t('Tebal', 'Bold')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('italic');
+                        setActiveToolbarPanel(null);
+                      }}
+                      className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs italic text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                    >
+                      <Italic className="w-3.5 h-3.5" />
+                      <span>{t('Miring', 'Italic')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyTextFormattingToEditorBlock('underline');
+                        setActiveToolbarPanel(null);
+                      }}
+                      className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs underline text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                    >
+                      <Underline className="w-3.5 h-3.5" />
+                      <span>{t('Garis', 'Underline')}</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-1.5 p-1">
+                  {[
+                    { type: 'paragraph', icon: <Type className="w-4 h-4 text-neutral-500" />, label: t('Paragraf', 'Paragraph') },
+                    { type: 'todo', icon: <CheckSquare className="w-4 h-4 text-blue-500" />, label: t('Tugas (To-Do)', 'Tugas (To-Do)') },
+                    { type: 'h1', icon: <Heading1 className="w-4 h-4 text-neutral-800 dark:text-neutral-200 font-bold" />, label: t('Judul Utama', 'Judul Utama') },
+                    { type: 'h2', icon: <Heading2 className="w-4 h-4 text-neutral-700 dark:text-neutral-300 font-bold" />, label: t('Subjudul', 'Subjudul') },
+                    { type: 'bullet', icon: <List className="w-4 h-4 text-amber-600" />, label: t('Poin Bulatan', 'Poin Bulatan') },
+                  ].map((item) => {
+                    const activeBlock = blocks.find(b => b.id === focusedBlockId);
+                    const isCurrent = activeBlock?.type === item.type;
+                    return (
+                      <button
+                        key={item.type}
+                        type="button"
+                        onClick={() => {
+                          if (activeToolbarPanel === 'type-changer') {
+                            changeBlockType(focusedBlockId, item.type as any);
+                          } else {
+                            const idx = blocks.findIndex(b => b.id === focusedBlockId);
+                            if (idx !== -1) {
+                              addBlock(item.type as any, idx);
+                            }
+                          }
+                          setActiveToolbarPanel(null);
+                        }}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
+                          activeToolbarPanel === 'type-changer' && isCurrent
+                            ? 'bg-[#337EA9]/10 text-[#337EA9] border-[#337EA9]/30 font-bold'
+                            : 'bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-neutral-100 dark:border-neutral-800'
+                        }`}
+                      >
+                        {item.icon}
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Simplified Icon-Only Button Bar (6 Requested buttons + Trash + Done) */
+              <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-1.5 px-2 bg-neutral-50 dark:bg-neutral-900 w-full rounded-lg [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                {/* 1. Text Editor Button (Type Format) */}
+                <button
+                  type="button"
+                  onClick={() => setActiveToolbarPanel('type-changer')}
+                  className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Ubah Format Blok', 'Block Format Menu')}
+                >
+                  <Type className="w-5 h-5" />
+                </button>
+
+                <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                {/* 5. Indentation Move Left */}
+                <button
+                  type="button"
+                  onClick={() => indentBlockLeft(focusedBlockId)}
+                  className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Kurangi Indentasi', 'Indent Left')}
+                >
+                  <Outdent className="w-5 h-5" />
+                </button>
+
+                {/* 6. Indentation Move Right */}
+                <button
+                  type="button"
+                  onClick={() => indentBlockRight(focusedBlockId)}
+                  className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Tambah Indentasi', 'Indent Right')}
+                >
+                  <Indent className="w-5 h-5" />
+                </button>
+
+                <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                {/* 3. Move Up Button */}
+                <button
+                  type="button"
+                  onClick={() => moveBlockUp(focusedBlockId)}
+                  disabled={blocks.findIndex(b => b.id === focusedBlockId) === 0}
+                  className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Pindahkan ke Atas', 'Move Up')}
+                >
+                  <ChevronUp className="w-5 h-5" />
+                </button>
+
+                {/* 2. Move Down Button */}
+                <button
+                  type="button"
+                  onClick={() => moveBlockDown(focusedBlockId)}
+                  disabled={blocks.findIndex(b => b.id === focusedBlockId) === blocks.length - 1}
+                  className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Pindahkan ke Bawah', 'Move Down')}
+                >
+                  <ChevronDown className="w-5 h-5" />
+                </button>
+
+                <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                {/* 4. Add New Line Button */}
+                <button
+                  type="button"
+                  onClick={() => setActiveToolbarPanel('add-line')}
+                  className="p-2 rounded-lg text-[#337EA9] hover:bg-[#337EA9]/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Tambah Baris Baru di Bawah', 'Add New Line Below')}
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idx = blocks.findIndex(b => b.id === focusedBlockId);
+                    if (idx !== -1) {
+                      const block = blocks[idx];
+                      setDeleteConfirmBlockId(block.id);
+                      setDeleteConfirmBlockType(block.type);
+                    }
+                  }}
+                  className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Hapus Blok', 'Delete Block')}
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+
+                {/* Extra: Done Check Button */}
+                <button
+                  type="button"
+                  onClick={() => setFocusedBlockId(null)}
+                  className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title={t('Selesai', 'Done')}
+                >
+                  <Check className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

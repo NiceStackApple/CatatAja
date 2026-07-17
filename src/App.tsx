@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
   Menu, 
@@ -47,7 +47,14 @@ import {
   Heading2,
   Pin,
   Type,
-  X
+  X,
+  CheckSquare,
+  AlertCircle,
+  Minus,
+  Indent,
+  Outdent,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,6 +67,7 @@ import DatabaseView from './components/DatabaseView';
 import PageIcon from './components/PageIcon';
 import ActivityRecapView from './components/ActivityRecapView';
 import TelegramBotView from './components/TelegramBotView';
+import KeepView from './components/KeepView';
 import LiveDateTimeBanner from './components/LiveDateTimeBanner';
 import AiAssistant from './components/AiAssistant';
 import NotificationCenter from './components/NotificationCenter';
@@ -67,6 +75,88 @@ import Logo from './components/Logo';
 import { TiptapEditor } from './components/TiptapEditor';
 import SettingsModal from './components/SettingsModal';
 import i18n from './i18n';
+
+// Helpers for inline Rich Text
+export const isHtmlEmpty = (html: string) => {
+  if (!html) return true;
+  const clean = html.replace(/<[^>]*>/g, '').trim();
+  return clean === '';
+};
+
+export const formatBlockContent = (content: string) => {
+  if (!content) return '';
+  let html = content;
+  // Convert markdown bold to HTML <b> for backward compatibility
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  // Convert markdown italic to HTML <i> for backward compatibility
+  html = html.replace(/\*([^*]+)\*/g, '<i>$1</i>');
+  // Convert markdown underline to HTML <u> for backward compatibility
+  html = html.replace(/__([^_]+)__/g, '<u>$1</u>');
+  return html;
+};
+
+interface ContentEditableBlockProps {
+  id: string;
+  value: string;
+  onChange: (val: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+  placeholder?: string;
+  className?: string;
+}
+
+export const ContentEditableBlock: React.FC<ContentEditableBlockProps> = ({
+  id,
+  value,
+  onChange,
+  onKeyDown,
+  onFocus,
+  onBlur,
+  placeholder,
+  className
+}) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current && ref.current.innerHTML !== value) {
+      const currentHTML = ref.current.innerHTML;
+      if (value === '' && (currentHTML === '<br>' || currentHTML === '<div><br></div>' || currentHTML === '<p><br></p>')) {
+        return;
+      }
+      ref.current.innerHTML = value;
+    }
+  }, [value]);
+
+  const handleInput = () => {
+    if (ref.current) {
+      let html = ref.current.innerHTML;
+      if (html === '<br>' || html === '<div><br></div>' || html === '<p><br></p>') {
+        html = '';
+      }
+      onChange(html);
+    }
+  };
+
+  return (
+    <div
+      ref={ref}
+      id={id}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={handleInput}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      className={`${className} outline-hidden focus:outline-hidden min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400 empty:before:pointer-events-none empty:before:opacity-60`}
+      data-placeholder={placeholder}
+      style={{
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+      }}
+    />
+  );
+};
 
 // Hardcoded state fallback
 import { 
@@ -76,7 +166,7 @@ import {
   INITIAL_DATABASE_ROWS 
 } from './mockData';
 
-import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry, AppSettings, NotificationItem, NotificationSettings } from './types';
+import { Page, Block, Habit, TrackingDay, DatabaseRow, PageType, ActivityEntry, AppSettings, NotificationItem, NotificationSettings, KeepNote } from './types';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, loginWithGoogle, logoutUser, saveUserDataToCloud, fetchUserDataFromCloud, updateUserProfileName } from './lib/firebase';
 
@@ -194,6 +284,29 @@ export default function App() {
   const [focusWriterTheme, setFocusWriterTheme] = useState<'warm' | 'dark' | 'grid'>('warm');
   const [copiedAlert, setCopiedAlert] = useState(false);
   const [isKeepEditorOpen, setIsKeepEditorOpen] = useState(false);
+  const [journalBlocks, setJournalBlocks] = useState<Block[]>([]);
+  const [focusedJournalBlockId, setFocusedJournalBlockId] = useState<string | null>(null);
+  const lastJournalSelectionRef = useRef<{ start: number; end: number; blockId: string | null }>({ start: 0, end: 0, blockId: null });
+  const [activeJournalToolbarPanel, setActiveJournalToolbarPanel] = useState<'type-changer' | 'add-line' | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const getJournalBlocks = (notesStr: string): Block[] => {
+    try {
+      if (notesStr && notesStr.startsWith('[') && notesStr.endsWith(']')) {
+        return JSON.parse(notesStr);
+      }
+    } catch (e) {}
+    // Fallback: convert HTML/text to block structure
+    const strippedText = notesStr ? notesStr.replace(/<[^>]*>/g, '').trim() : '';
+    return [{ id: `jb-init-${Date.now()}`, type: 'paragraph', content: strippedText || notesStr || '' }];
+  };
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -391,15 +504,7 @@ export default function App() {
             if (cloudData.notificationSettings) setNotificationSettings(cloudData.notificationSettings);
           } else if (res && !res.exists && !res.isOffline) {
             // First time cloud user - start with fresh, completely empty default structures
-            const cleanPages: Page[] = [
-              { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-              { id: 'pg-2', title: 'Workspace Tracking Calendar', icon: '📅', cover: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)', type: 'calendar', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-              { id: 'pg-3', title: 'Productivity Analytics', icon: '📊', cover: 'linear-gradient(135deg, #fd1d1d 0%, #fcb045 100%)', type: 'analytics', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-              { id: 'pg-4', title: 'Todo', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
-              { id: 'pg-5', title: 'Catatan & Ide Kreatif', icon: '📝', cover: 'linear-gradient(135deg, #f1a7a1 0%, #f7dbbd 100%)', type: 'notes', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
-              { id: 'pg-6', title: 'Dashboard Kustom (Blank Canvas)', icon: '✨', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'blank', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
-              { id: 'pg-recap', title: 'Daily Activity Recap', icon: '⏳', cover: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', type: 'recap', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] }
-            ];
+            const cleanPages: Page[] = INITIAL_PAGES.map(p => ({ ...p, createdAt: new Date().toISOString().split('T')[0] }));
 
             await saveUserDataToCloud(currentUser.uid, {
               pages: cleanPages,
@@ -640,6 +745,136 @@ export default function App() {
     }
   };
 
+  // --- JOURNAL BLOCK ACTIONS ---
+  const handleOpenKeepEditor = () => {
+    const blocks = getJournalBlocks(todayTrackingData.notes || '');
+    setJournalBlocks(blocks);
+    setFocusedJournalBlockId(null);
+    setActiveJournalToolbarPanel(null);
+    setIsKeepEditorOpen(true);
+  };
+
+  const updateJournalBlocks = (updatedBlocks: Block[]) => {
+    setJournalBlocks(updatedBlocks);
+    handleUpdateTrackingDay({
+      ...todayTrackingData,
+      notes: JSON.stringify(updatedBlocks)
+    });
+  };
+
+  const handleJournalBlockChange = (id: string, updatedFields: Partial<Block>) => {
+    const updated = journalBlocks.map(b => b.id === id ? { ...b, ...updatedFields } as Block : b);
+    updateJournalBlocks(updated);
+  };
+
+  const applyTextFormattingToJournalBlock = (formatType: 'bold' | 'italic' | 'underline') => {
+    document.execCommand(formatType, false);
+  };
+
+  const handleJournalBlockAddBelow = (type: Block['type'], focusBlockId: string) => {
+    const index = journalBlocks.findIndex(b => b.id === focusBlockId);
+    if (index === -1) return;
+
+    const newBlockId = `jb-${Date.now()}`;
+    const newBlock: Block = {
+      id: newBlockId,
+      type,
+      content: '',
+      isCompleted: false
+    };
+
+    const updated = [...journalBlocks];
+    updated.splice(index + 1, 0, newBlock);
+
+    updateJournalBlocks(updated);
+    setFocusedJournalBlockId(newBlockId);
+    
+    // Auto-focus helper
+    setTimeout(() => {
+      const input = document.getElementById(`journal-input-${newBlockId}`) as HTMLTextAreaElement | null;
+      if (input) {
+        input.focus();
+      }
+    }, 50);
+  };
+
+  const handleJournalBlockDelete = (id: string) => {
+    if (journalBlocks.length <= 1) return; // Keep at least one
+
+    const index = journalBlocks.findIndex(b => b.id === id);
+    const updated = journalBlocks.filter(b => b.id !== id);
+    
+    updateJournalBlocks(updated);
+
+    const newFocusIndex = Math.max(0, index - 1);
+    const nextFocusedBlock = updated[newFocusIndex];
+    if (nextFocusedBlock) {
+      setFocusedJournalBlockId(nextFocusedBlock.id);
+      setTimeout(() => {
+        const input = document.getElementById(`journal-input-${nextFocusedBlock.id}`) as HTMLTextAreaElement | null;
+        if (input) input.focus();
+      }, 50);
+    } else {
+      setFocusedJournalBlockId(null);
+    }
+  };
+
+  const handleJournalBlockMoveUp = (id: string) => {
+    const index = journalBlocks.findIndex(b => b.id === id);
+    if (index > 0) {
+      const updated = [...journalBlocks];
+      const [block] = updated.splice(index, 1);
+      updated.splice(index - 1, 0, block);
+      updateJournalBlocks(updated);
+    }
+  };
+
+  const handleJournalBlockMoveDown = (id: string) => {
+    const index = journalBlocks.findIndex(b => b.id === id);
+    if (index !== -1 && index < journalBlocks.length - 1) {
+      const updated = [...journalBlocks];
+      const [block] = updated.splice(index, 1);
+      updated.splice(index + 1, 0, block);
+      updateJournalBlocks(updated);
+    }
+  };
+
+  const handleJournalBlockIndentRight = (id: string) => {
+    const updated = journalBlocks.map(b => {
+      if (b.id === id) {
+        const currentIndent = b.indent ?? 0;
+        return { ...b, indent: Math.min(currentIndent + 1, 5) };
+      }
+      return b;
+    });
+    updateJournalBlocks(updated);
+  };
+
+  const handleJournalBlockIndentLeft = (id: string) => {
+    const updated = journalBlocks.map(b => {
+      if (b.id === id) {
+        const currentIndent = b.indent ?? 0;
+        return { ...b, indent: Math.max(currentIndent - 1, 0) };
+      }
+      return b;
+    });
+    updateJournalBlocks(updated);
+  };
+
+  const handleJournalBlockChangeType = (id: string, type: Block['type']) => {
+    const updated = journalBlocks.map(b => {
+      if (b.id === id) {
+        return {
+          ...b,
+          type,
+          icon: type === 'callout' ? (b.icon || '💡') : undefined
+        } as Block;
+      }
+      return b;
+    });
+    updateJournalBlocks(updated);
+  };
+
   // Insert formatting at the current cursor / selection point inside today-journal-textarea
   const insertTextAtCursor = (before: string, after: string = '') => {
     const textarea = journalTextareaRef.current;
@@ -751,15 +986,7 @@ export default function App() {
     localStorage.removeItem('nt_activity_recaps');
     localStorage.removeItem('nt_settings');
 
-    const cleanPages: Page[] = [
-      { id: 'pg-1', title: 'Daily Habits Logger', icon: '📔', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'tracker', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-      { id: 'pg-2', title: 'Workspace Tracking Calendar', icon: '📅', cover: 'linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%)', type: 'calendar', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-      { id: 'pg-3', title: 'Productivity Analytics', icon: '📊', cover: 'linear-gradient(135deg, #fd1d1d 0%, #fcb045 100%)', type: 'analytics', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] },
-      { id: 'pg-4', title: 'Todo', icon: '🗂️', cover: 'linear-gradient(135deg, #cfd9df 0%, #e2ebf0 100%)', type: 'database', isFavorite: false, createdAt: new Date().toISOString().split('T')[0] },
-      { id: 'pg-5', title: 'Catatan & Ide Kreatif', icon: '📝', cover: 'linear-gradient(135deg, #f1a7a1 0%, #f7dbbd 100%)', type: 'notes', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
-      { id: 'pg-6', title: 'Dashboard Kustom (Blank Canvas)', icon: '✨', cover: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', type: 'blank', isFavorite: false, createdAt: new Date().toISOString().split('T')[0], blocks: [] },
-      { id: 'pg-recap', title: 'Daily Activity Recap', icon: '⏳', cover: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)', type: 'recap', isFavorite: true, createdAt: new Date().toISOString().split('T')[0] }
-    ];
+    const cleanPages: Page[] = INITIAL_PAGES.map(p => ({ ...p, createdAt: new Date().toISOString().split('T')[0] }));
 
     setPages(cleanPages);
     setHabits(INITIAL_HABITS);
@@ -842,10 +1069,11 @@ export default function App() {
       calendar: 'New Tracking Calendar',
       analytics: 'New Analytics Statistics',
       database: 'New Project Database',
-      notes: 'New Blank Notes',
+      notes: 'New Page',
       blank: 'Custom Canvas Dashboard',
       recap: 'New Daily Activity Recap',
-      telegram: 'Telegram AI Agent / Bot'
+      telegram: 'Telegram AI Agent / Bot',
+      keep: 'New Keep'
     };
 
     const icons: Record<PageType, string> = {
@@ -856,7 +1084,8 @@ export default function App() {
       notes: '📝',
       blank: '✨',
       recap: '⏳',
-      telegram: '✈️'
+      telegram: '✈️',
+      keep: '💡'
     };
 
     const gradientCovers = [
@@ -878,12 +1107,108 @@ export default function App() {
       isFavorite: false,
       createdAt: new Date().toISOString().split('T')[0],
       blocks: type === 'notes' ? [
-        { id: 'b-1', type: 'h1', content: '💡 Catatan Baru' },
+        { id: 'b-1', type: 'h1', content: '💡 Halaman Baru' },
         { id: 'b-2', type: 'paragraph', content: 'Mulai menulis catatan di sini...' }
       ] : type === 'blank' ? [
         { id: 'b-1', type: 'h1', content: '✨ Halaman Kosong (Blank Page)' },
         { id: 'b-2', type: 'paragraph', content: 'Halaman kosong Notion-style Anda. Klik tombol "+" di sebelah kiri baris mana saja untuk menambahkan Tabel Dinamis, Grafik Visual, atau Jembatan Rangkuman antar halaman secara langsung!' }
       ] : undefined,
+      keepNotes: type === 'keep' ? [
+        {
+          id: 'kn-1',
+          title: 'Hai Nico, how are you?',
+          isPinned: true,
+          color: 'amber',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-1-1', type: 'todo', content: 'Belajar editing n content', isCompleted: true },
+            { id: 'kb-1-2', type: 'todo', content: 'Belajar ai agent', isCompleted: true },
+            { id: 'kb-1-3', type: 'todo', content: 'Cari sertif dari course google and AI', isCompleted: false },
+            { id: 'kb-1-4', type: 'todo', content: 'Cari sertif Web3', isCompleted: false },
+            { id: 'kb-1-5', type: 'todo', content: 'Coba instalasi 9router', isCompleted: false },
+          ]
+        },
+        {
+          id: 'kn-2',
+          title: 'Belajar',
+          isPinned: true,
+          color: 'default',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-2-1', type: 'todo', content: 'OpenDesign', isCompleted: false },
+            { id: 'kb-2-2', type: 'todo', content: 'OpenRouter', isCompleted: false },
+            { id: 'kb-2-3', type: 'todo', content: '9Router', isCompleted: false },
+            { id: 'kb-2-4', type: 'todo', content: 'Anthropic Courses', isCompleted: false },
+            { id: 'kb-2-5', type: 'todo', content: 'Python', isCompleted: false },
+            { id: 'kb-2-6', type: 'todo', content: 'Negotiation', isCompleted: false },
+            { id: 'kb-2-7', type: 'todo', content: 'Editing', isCompleted: false },
+            { id: 'kb-2-8', type: 'todo', content: 'Storytelling', isCompleted: false, indent: 1 },
+            { id: 'kb-2-9', type: 'todo', content: 'Google spark', isCompleted: false },
+            { id: 'kb-2-10', type: 'todo', content: 'Ditepuk saat sholat kaki kanan atau kiri dulu', isCompleted: false },
+          ]
+        },
+        {
+          id: 'kn-3',
+          title: 'Ide ide random',
+          isPinned: true,
+          color: 'yellow',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-3-1', type: 'bullet', content: 'Wastafel portable' },
+            { id: 'kb-3-2', type: 'bullet', content: 'brankas pengatur uang' },
+            { id: 'kb-3-3', type: 'bullet', content: 'bantal portable untuk pelajar' },
+            { id: 'kb-3-4', type: 'bullet', content: 'wadah alat tulis' },
+            { id: 'kb-3-5', type: 'bullet', content: 'penyeimbang kendaraan anti tergulin di belokan' },
+            { id: 'kb-3-6', type: 'bullet', content: 'app untuk langsung catat dengan shortcut' },
+            { id: 'kb-3-7', type: 'bullet', content: 'app untuk mencari hp hilang' },
+          ]
+        },
+        {
+          id: 'kn-4',
+          title: 'My System (Self Investment & business)',
+          isPinned: true,
+          color: 'orange',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-4-1', type: 'h2', content: '1. Pondasi Quest WEEKLY' },
+            { id: 'kb-4-2', type: 'paragraph', content: '- Make some Roblox shirts if then i had enough robux ill sell ugc' },
+            { id: 'kb-4-3', type: 'paragraph', content: '- promote my Roblox product on tiktok' },
+            { id: 'kb-4-4', type: 'paragraph', content: '- post 2-5 unique gadgets videos where i was bought from shopee on tiktok' },
+            { id: 'kb-4-5', type: 'paragraph', content: '- post self improvement video atleast 1 times a week' },
+            { id: 'kb-4-6', type: 'paragraph', content: '- learn forex and machine learning at least 2x a week' },
+            { id: 'kb-4-7', type: 'paragraph', content: '- run at least 2x a week' },
+            { id: 'kb-4-8', type: 'paragraph', content: '- belajar TKA' },
+            { id: 'kb-4-9', type: 'h2', content: 'Rundown' },
+            { id: 'kb-4-10', type: 'paragraph', content: '1. Monday - post unique gadget and learning...' },
+          ]
+        },
+        {
+          id: 'kn-5',
+          title: "What's have you learn",
+          isPinned: false,
+          color: 'default',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-5-1', type: 'h2', content: 'C++ Beginners' },
+            { id: 'kb-5-2', type: 'paragraph', content: '- Array' },
+            { id: 'kb-5-3', type: 'paragraph', content: '- For Loop' },
+            { id: 'kb-5-4', type: 'paragraph', content: '- Rekursif' },
+            { id: 'kb-5-5', type: 'paragraph', content: '- Return' },
+            { id: 'kb-5-6', type: 'paragraph', content: '- Tipe Data' },
+          ]
+        },
+        {
+          id: 'kn-6',
+          title: 'Todo may',
+          isPinned: false,
+          color: 'rose',
+          createdAt: new Date().toISOString(),
+          blocks: [
+            { id: 'kb-6-1', type: 'todo', content: 'Catat keuangan', isCompleted: false },
+            { id: 'kb-6-2', type: 'todo', content: 'Edit video mc', isCompleted: false },
+          ]
+        },
+      ] : []
     };
 
     setPages([...pages, newPage]);
@@ -906,6 +1231,10 @@ export default function App() {
   // Block change updates inside custom note page elements
   const handleUpdatePageBlocks = (pageId: string, updatedBlocks: Block[]) => {
     setPages(pages.map(p => p.id === pageId ? { ...p, blocks: updatedBlocks } : p));
+  };
+
+  const handleUpdatePageKeepNotes = (pageId: string, updatedKeepNotes: KeepNote[]) => {
+    setPages(pages.map(p => p.id === pageId ? { ...p, keepNotes: updatedKeepNotes } : p));
   };
 
   const handleUpdateActivitiesForDate = (date: string, activities: ActivityEntry[]) => {
@@ -1216,7 +1545,7 @@ export default function App() {
                       {/* Google Keep-styled unclicked card */}
                       <div
                         id="keep-note-card"
-                        onClick={() => setIsKeepEditorOpen(true)}
+                        onClick={handleOpenKeepEditor}
                         className="bg-white border border-[#EBEBEB] hover:border-neutral-350 hover:shadow-md transition-all rounded-xl p-4 cursor-pointer select-none relative overflow-hidden"
                       >
                         {todayTrackingData.journalTitle ? (
@@ -1226,17 +1555,37 @@ export default function App() {
                         ) : null}
                         
                         {todayTrackingData.notes ? (
-                          <div 
-                            className="prose prose-sm max-w-none text-neutral-700 text-xs font-sans leading-relaxed break-words tiptap-output"
-                            dangerouslySetInnerHTML={{ 
-                              __html: /<[a-z][\s\S]*>/i.test(todayTrackingData.notes) 
-                                ? todayTrackingData.notes 
-                                : parseMarkdownPreview(todayTrackingData.notes) 
-                            }}
-                          />
+                          <div className="space-y-1.5 text-xs text-neutral-600 select-none pr-1">
+                            {getJournalBlocks(todayTrackingData.notes).slice(0, 6).map((block) => {
+                              const isTodo = block.type === 'todo';
+                              const isBullet = block.type === 'bullet';
+                              return (
+                                <div key={block.id} className="flex items-start gap-1.5">
+                                  {isTodo ? (
+                                    <span className={`w-3.5 h-3.5 rounded border border-neutral-300 flex items-center justify-center shrink-0 mt-0.5 ${block.isCompleted ? 'bg-blue-500 border-blue-500' : ''}`}>
+                                      {block.isCompleted && <Check className="w-2.5 h-2.5 text-white stroke-[3px]" />}
+                                    </span>
+                                  ) : isBullet ? (
+                                    <span className="text-neutral-400 font-bold shrink-0">•</span>
+                                  ) : (
+                                    <span className="text-neutral-400 font-bold shrink-0">•</span>
+                                  )}
+                                  <span 
+                                    className={`truncate leading-relaxed flex-1 ${block.isCompleted ? 'line-through text-neutral-400' : 'text-neutral-700'}`}
+                                    dangerouslySetInnerHTML={{ __html: formatBlockContent(block.content) || '...' }}
+                                  />
+                                </div>
+                              );
+                            })}
+                            {getJournalBlocks(todayTrackingData.notes).length > 6 && (
+                              <div className="text-[10px] text-neutral-400 font-medium pl-1 mt-1">
+                                + {getJournalBlocks(todayTrackingData.notes).length - 6} {settings.language === 'id' ? 'item lainnya' : 'more items'}
+                              </div>
+                            )}
+                          </div>
                         ) : (
                           <p className="text-xs text-[#787774] italic font-sans leading-relaxed">
-                            Take a note...
+                            {settings.language === 'id' ? 'Tulis catatan...' : 'Take a note...'}
                           </p>
                         )}
                       </div>
@@ -1244,73 +1593,526 @@ export default function App() {
                       {/* --- GOOGLE KEEP STYLE NOTE EDITOR MODAL --- */}
                       <AnimatePresence>
                         {isKeepEditorOpen && (
-                          <>
-                            {/* Backdrop */}
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 0.5 }}
-                              exit={{ opacity: 0 }}
-                              onClick={() => setIsKeepEditorOpen(false)}
-                              className="fixed inset-0 bg-neutral-950/40 z-50 cursor-pointer backdrop-blur-xs"
-                            />
+                          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-6 bg-neutral-950/40 dark:bg-neutral-950/60 backdrop-blur-xs">
+                            {/* Backdrop click to close (only on desktop) */}
+                            {!isMobile && (
+                              <div className="absolute inset-0 cursor-default" onClick={() => setIsKeepEditorOpen(false)} />
+                            )}
                             {/* Keep Modal Content */}
                             <motion.div
-                              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                              initial={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.95 }}
+                              animate={isMobile ? { y: 0 } : { opacity: 1, scale: 1 }}
+                              exit={isMobile ? { y: '100%' } : { opacity: 0, scale: 0.95 }}
                               transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-                              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] sm:max-w-xl bg-white border border-neutral-200 rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col max-h-[85vh]"
+                              className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-xl bg-white dark:bg-neutral-900 border-0 sm:border border-neutral-200 dark:border-neutral-800 rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-full"
                             >
                               {/* Header: Title and Pin */}
-                              <div className="flex items-center justify-between p-4 pb-2">
+                              <div className="flex items-center justify-between p-4 pb-2 border-b border-neutral-100">
+                                <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                                  {settings.language === 'id' ? 'Edit Catatan Harian' : 'Edit Journal Notes'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsKeepEditorOpen(false)}
+                                  className="p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors cursor-pointer"
+                                  title="Close"
+                                >
+                                  <X className="w-4.5 h-4.5" />
+                                </button>
+                              </div>
+
+                              {/* Body: Note Content Area with Blocks Editor */}
+                              <div 
+                                className={`flex-1 overflow-y-auto px-6 py-4 space-y-4 ${isMobile ? 'pb-48' : 'pb-6'}`}
+                                onClick={(e) => {
+                                  if (e.target === e.currentTarget) {
+                                    setFocusedJournalBlockId(null);
+                                  }
+                                }}
+                              >
                                 <input
                                   id="keep-editor-title-input"
                                   type="text"
                                   value={todayTrackingData.journalTitle || ''}
                                   onChange={(e) => handleUpdateTrackingDay({ ...todayTrackingData, journalTitle: e.target.value })}
-                                  placeholder="Title"
-                                  className="w-full text-base font-bold text-neutral-800 placeholder-neutral-400 bg-transparent border-0 outline-hidden focus:ring-0 px-1 py-1"
+                                  placeholder={settings.language === 'id' ? 'Judul Catatan' : 'Title'}
+                                  className="w-full text-xl font-extrabold bg-transparent border-none text-neutral-800 dark:text-neutral-100 placeholder-neutral-300 dark:placeholder-neutral-600 focus:outline-none py-1 focus:ring-0 focus:border-none px-1"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    // Pinned visual feedback
-                                  }}
-                                  className="p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 rounded-full transition-colors cursor-pointer"
-                                  title="Pin note"
-                                >
-                                  <Pin className="w-4 h-4" />
-                                </button>
-                              </div>
 
-                              {/* Body: Note Content Area */}
-                              <div className="flex-1 overflow-y-auto px-4 pb-4">
-                                <TiptapEditor
-                                  value={todayTrackingData.notes || ''}
-                                  onChange={(html) => handleUpdateTrackingDay({ ...todayTrackingData, notes: html })}
-                                  placeholder="Notes..."
-                                />
-                              </div>
+                                <div className="space-y-1 mt-2">
+                                  {journalBlocks.map((block) => {
+                                    const isTodo = block.type === 'todo';
+                                    const isBullet = block.type === 'bullet';
+                                    const isHeading1 = block.type === 'h1';
+                                    const isHeading2 = block.type === 'h2';
+                                    const isQuote = block.type === 'quote';
+                                    const isCallout = block.type === 'callout';
+                                    const isDivider = block.type === 'divider';
 
-                              {/* Formatting Toolbar */}
-                              <div className="border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] text-neutral-400 select-none">
-                                    Edited {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                  </span>
+                                    return (
+                                      <div
+                                        key={block.id}
+                                        id={`journal-wrapper-${block.id}`}
+                                        onClick={() => setFocusedJournalBlockId(block.id)}
+                                        onFocusCapture={() => setFocusedJournalBlockId(block.id)}
+                                        className={`group relative flex flex-col px-1.5 py-1 rounded-lg hover:bg-neutral-800/5 dark:hover:bg-white/5 transition-colors ${
+                                          focusedJournalBlockId === block.id ? 'bg-neutral-800/5 dark:bg-white/5' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-start gap-1.5">
+                                          {/* Indicator Column */}
+                                          <div className="flex items-center shrink-0 w-6 justify-center pt-1.5 select-none text-neutral-400">
+                                            {isTodo && (
+                                              <input
+                                                type="checkbox"
+                                                checked={block.isCompleted || false}
+                                                onChange={(e) => handleJournalBlockChange(block.id, { isCompleted: e.target.checked })}
+                                                className="w-4 h-4 rounded border-neutral-300 text-[#337EA9] focus:ring-[#337EA9] cursor-pointer"
+                                              />
+                                            )}
+                                            {isBullet && <span className="text-base font-bold">•</span>}
+                                            {isHeading1 && <span className="text-xs font-bold text-neutral-300 dark:text-neutral-600">H1</span>}
+                                            {isHeading2 && <span className="text-xs font-bold text-neutral-300 dark:text-neutral-600">H2</span>}
+                                            {isQuote && <span className="text-lg font-bold">“</span>}
+                                            {isCallout && <span className="text-sm">{block.icon || '💡'}</span>}
+                                            {!isTodo && !isBullet && !isHeading1 && !isHeading2 && !isQuote && !isCallout && !isDivider && (
+                                              <span className="text-xs opacity-0">•</span>
+                                            )}
+                                          </div>
+
+                                          {/* Main block text area */}
+                                          <div 
+                                            className="flex-1 min-w-0"
+                                            style={{ paddingLeft: block.indent ? `${block.indent * 16}px` : undefined }}
+                                          >
+                                            {isDivider ? (
+                                              <div className="py-2 cursor-pointer" onClick={() => handleJournalBlockDelete(block.id)}>
+                                                <hr className="border-t border-neutral-200 dark:border-neutral-800" />
+                                              </div>
+                                            ) : (
+                                              <ContentEditableBlock
+                                                id={`journal-input-${block.id}`}
+                                                value={block.content}
+                                                onChange={(val) => handleJournalBlockChange(block.id, { content: val })}
+                                                onKeyDown={(e) => {
+                                                  if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+                                                    e.preventDefault();
+                                                    applyTextFormattingToJournalBlock('bold');
+                                                  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+                                                    e.preventDefault();
+                                                    applyTextFormattingToJournalBlock('italic');
+                                                  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
+                                                    e.preventDefault();
+                                                    applyTextFormattingToJournalBlock('underline');
+                                                  } else if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleJournalBlockAddBelow(block.type, block.id);
+                                                  } else if (e.key === 'Backspace' && isHtmlEmpty(block.content)) {
+                                                    e.preventDefault();
+                                                    handleJournalBlockDelete(block.id);
+                                                  }
+                                                }}
+                                                placeholder={
+                                                  isHeading1 ? (settings.language === 'id' ? 'Judul Utama' : 'Heading 1') :
+                                                  isHeading2 ? (settings.language === 'id' ? 'Subjudul' : 'Heading 2') :
+                                                  isQuote ? (settings.language === 'id' ? 'Kutipan' : 'Quote') :
+                                                  isCallout ? (settings.language === 'id' ? 'Info' : 'Callout Box') :
+                                                  isTodo ? (settings.language === 'id' ? 'Daftar Tugas' : 'List item') :
+                                                  (settings.language === 'id' ? 'Ketik di sini...' : 'Type here...')
+                                                }
+                                                className={`w-full bg-transparent border-none outline-hidden py-1 leading-relaxed text-neutral-800 dark:text-neutral-100 focus:ring-0 ${
+                                                  isHeading1 ? 'text-lg font-bold' :
+                                                  isHeading2 ? 'text-base font-semibold' :
+                                                  isQuote ? 'italic border-l-2 border-[#337EA9] pl-3 text-neutral-600 dark:text-neutral-400' :
+                                                  isCallout ? 'bg-neutral-50 dark:bg-neutral-850 px-3.5 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-800' :
+                                                  'text-sm'
+                                                }`}
+                                              />
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                                <div className="flex items-center gap-2">
+                              </div>
+
+                              {/* 3.5 STATIC DESKTOP BOTTOM TOOLBAR FOOTER */}
+                              {!isMobile && (
+                                <div className="border-t border-neutral-150 dark:border-neutral-850 bg-neutral-50/50 dark:bg-neutral-900/50 px-4 py-2.5 flex items-center justify-between shrink-0 select-none relative">
+                                  <div className="flex items-center gap-1.5">
+                                    {/* 1. Format text / Change block type */}
+                                    <div className="relative">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveJournalToolbarPanel(activeJournalToolbarPanel === 'type-changer' ? null : 'type-changer');
+                                        }}
+                                        className={`p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 transition-colors cursor-pointer flex items-center justify-center ${
+                                          activeJournalToolbarPanel === 'type-changer' ? 'bg-neutral-200/80 dark:bg-neutral-800' : ''
+                                        }`}
+                                        title="text formater"
+                                      >
+                                        <Type className="w-4.5 h-4.5" />
+                                      </button>
+                                      
+                                      {activeJournalToolbarPanel === 'type-changer' && (
+                                        <div className="absolute left-0 bottom-11 z-50 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg p-1.5 flex flex-row items-center gap-1 min-w-[340px] select-none">
+                                          {[
+                                            { type: 'paragraph', icon: <Type className="w-3.5 h-3.5 text-neutral-500" />, label: settings.language === 'id' ? 'Paragraf' : 'Paragraph' },
+                                            { type: 'todo', icon: <CheckSquare className="w-3.5 h-3.5 text-blue-500" />, label: settings.language === 'id' ? 'Tugas (To-Do)' : 'To-Do List' },
+                                            { type: 'h1', icon: <Heading1 className="w-3.5 h-3.5 text-neutral-800 dark:text-neutral-200 font-bold" />, label: settings.language === 'id' ? 'Judul Utama' : 'Heading 1' },
+                                            { type: 'h2', icon: <Heading2 className="w-3.5 h-3.5 text-neutral-700 dark:text-neutral-300 font-bold" />, label: settings.language === 'id' ? 'Subjudul' : 'Heading 2' },
+                                            { type: 'bullet', icon: <List className="w-3.5 h-3.5 text-amber-600" />, label: settings.language === 'id' ? 'Poin Bulatan' : 'Bullet List' },
+                                          ].map((item) => {
+                                            const activeBlock = journalBlocks.find(b => b.id === focusedJournalBlockId);
+                                            const isCurrent = activeBlock?.type === item.type;
+                                            return (
+                                              <button
+                                                key={item.type}
+                                                type="button"
+                                                onClick={() => {
+                                                  if (focusedJournalBlockId) {
+                                                    handleJournalBlockChangeType(focusedJournalBlockId, item.type as any);
+                                                  } else if (journalBlocks.length > 0) {
+                                                    handleJournalBlockChangeType(journalBlocks[journalBlocks.length - 1].id, item.type as any);
+                                                  }
+                                                  setActiveJournalToolbarPanel(null);
+                                                }}
+                                                className={`p-1.5 rounded-md transition-all cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-750 flex items-center justify-center shrink-0 ${
+                                                  isCurrent ? 'bg-[#337EA9]/10 text-[#337EA9]' : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
+                                                }`}
+                                                title={item.label}
+                                              >
+                                                {item.icon}
+                                              </button>
+                                            );
+                                          })}
+
+                                          {/* Divider line before text formats */}
+                                          <div className="h-4 w-[1px] bg-neutral-200 dark:bg-neutral-750 mx-1 shrink-0" />
+
+                                          {/* Bold, Italic, Underline buttons */}
+                                          <button
+                                            type="button"
+                                            onClick={() => applyTextFormattingToJournalBlock('bold')}
+                                            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-750 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                                            title="Bold"
+                                          >
+                                            <Bold className="w-3.5 h-3.5 font-bold" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => applyTextFormattingToJournalBlock('italic')}
+                                            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-750 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                                            title="Italic"
+                                          >
+                                            <Italic className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => applyTextFormattingToJournalBlock('underline')}
+                                            className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-750 rounded-md transition duration-150 cursor-pointer flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white shrink-0"
+                                            title="Underline"
+                                          >
+                                            <Underline className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="h-5 w-[1px] bg-neutral-250 dark:bg-neutral-850 mx-1" />
+
+                                    {/* Block Action Group - Enabled when focusedJournalBlockId is present */}
+                                    <div className="flex items-center gap-1">
+                                      {/* Indent Left */}
+                                      <button
+                                        type="button"
+                                        onClick={() => focusedJournalBlockId && handleJournalBlockIndentLeft(focusedJournalBlockId)}
+                                        disabled={!focusedJournalBlockId}
+                                        className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Kurangi Indentasi' : 'Indent Left'}
+                                      >
+                                        <Outdent className="w-4.5 h-4.5" />
+                                      </button>
+
+                                      {/* Indent Right */}
+                                      <button
+                                        type="button"
+                                        onClick={() => focusedJournalBlockId && handleJournalBlockIndentRight(focusedJournalBlockId)}
+                                        disabled={!focusedJournalBlockId}
+                                        className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Tambah Indentasi' : 'Indent Right'}
+                                      >
+                                        <Indent className="w-4.5 h-4.5" />
+                                      </button>
+
+                                      {/* Move Up */}
+                                      <button
+                                        type="button"
+                                        onClick={() => focusedJournalBlockId && handleJournalBlockMoveUp(focusedJournalBlockId)}
+                                        disabled={!focusedJournalBlockId || journalBlocks.findIndex(b => b.id === focusedJournalBlockId) === 0}
+                                        className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Pindahkan ke Atas' : 'Move Up'}
+                                      >
+                                        <ChevronUp className="w-4.5 h-4.5" />
+                                      </button>
+
+                                      {/* Move Down */}
+                                      <button
+                                        type="button"
+                                        onClick={() => focusedJournalBlockId && handleJournalBlockMoveDown(focusedJournalBlockId)}
+                                        disabled={!focusedJournalBlockId || journalBlocks.findIndex(b => b.id === focusedJournalBlockId) === journalBlocks.length - 1}
+                                        className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Pindahkan ke Bawah' : 'Move Down'}
+                                      >
+                                        <ChevronDown className="w-4.5 h-4.5" />
+                                      </button>
+
+                                      {/* Add line below */}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (focusedJournalBlockId) {
+                                            handleJournalBlockAddBelow('paragraph', focusedJournalBlockId);
+                                          } else if (journalBlocks.length > 0) {
+                                            handleJournalBlockAddBelow('paragraph', journalBlocks[journalBlocks.length - 1].id);
+                                          }
+                                        }}
+                                        className="p-2 rounded-lg text-[#337EA9] hover:bg-[#337EA9]/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Tambah Baris Baru' : 'Add Line Below'}
+                                      >
+                                        <Plus className="w-4.5 h-4.5" />
+                                      </button>
+
+                                      {/* Delete block */}
+                                      <button
+                                        type="button"
+                                        onClick={() => focusedJournalBlockId && handleJournalBlockDelete(focusedJournalBlockId)}
+                                        disabled={!focusedJournalBlockId || journalBlocks.length <= 1}
+                                        className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center"
+                                        title={settings.language === 'id' ? 'Hapus Blok' : 'Delete Block'}
+                                      >
+                                        <Trash2 className="w-4.5 h-4.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Close / "Tutup" button on the right */}
                                   <button
                                     type="button"
                                     onClick={() => setIsKeepEditorOpen(false)}
-                                    className="px-4 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs rounded-md transition-all cursor-pointer"
+                                    className="px-5 py-2 hover:bg-neutral-200/60 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
                                   >
-                                    Close
+                                    {settings.language === 'id' ? 'Tutup' : 'Close'}
                                   </button>
                                 </div>
-                              </div>
+                              )}
+
+                              {/* Formatting Toolbar - Mobile Only */}
+                              {isMobile && (
+                                <div className="border-t border-neutral-100 bg-neutral-50 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-neutral-400 select-none">
+                                      Edited {new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsKeepEditorOpen(false)}
+                                      className="px-4 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold text-xs rounded-md transition-all cursor-pointer"
+                                    >
+                                      Close
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* --- MOBILE KEYBOARD-REPLACEMENT TEXT EDITOR TOOLBAR --- */}
+                              <AnimatePresence>
+                                {isMobile && focusedJournalBlockId && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: 30 }}
+                                    transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                                    className="absolute bottom-0 left-0 right-0 z-55 bg-white border-t border-neutral-200 shadow-[0_-4px_16px_rgba(0,0,0,0.1)] px-3 py-2 flex flex-col gap-2 pb-5"
+                                  >
+                                    {activeJournalToolbarPanel ? (
+                                      /* Sub-panel */
+                                      <div className="flex flex-col gap-2">
+                                        <div className="flex items-center justify-between px-2 pb-1 border-b border-neutral-100 dark:border-neutral-800">
+                                          <span className="text-[10px] font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest">
+                                            {activeJournalToolbarPanel === 'type-changer' 
+                                              ? (settings.language === 'id' ? 'Ubah Jenis & Format' : 'Convert & Format Block') 
+                                              : (settings.language === 'id' ? 'Tambah Blok di Bawah' : 'Insert Block Below')}
+                                          </span>
+                                          <button 
+                                            type="button"
+                                            onClick={() => setActiveJournalToolbarPanel(null)} 
+                                            className="px-2 py-0.5 text-xs text-[#337EA9] hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded font-bold cursor-pointer transition-colors"
+                                          >
+                                            {settings.language === 'id' ? 'Batal' : 'Cancel'}
+                                          </button>
+                                        </div>
+
+                                        {activeJournalToolbarPanel === 'type-changer' && (
+                                          <div className="flex items-center gap-1.5 px-1 pb-2 border-b border-neutral-100 dark:border-neutral-800">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                applyTextFormattingToJournalBlock('bold');
+                                                setActiveJournalToolbarPanel(null);
+                                              }}
+                                              className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                                            >
+                                              <Bold className="w-3.5 h-3.5 font-bold" />
+                                              <span>{settings.language === 'id' ? 'Tebal' : 'Bold'}</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                applyTextFormattingToJournalBlock('italic');
+                                                setActiveJournalToolbarPanel(null);
+                                              }}
+                                              className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs italic text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                                            >
+                                              <Italic className="w-3.5 h-3.5" />
+                                              <span>{settings.language === 'id' ? 'Miring' : 'Italic'}</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                applyTextFormattingToJournalBlock('underline');
+                                                setActiveJournalToolbarPanel(null);
+                                              }}
+                                              className="flex-1 py-2 px-3 bg-neutral-50 dark:bg-neutral-800/60 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg flex items-center justify-center gap-1.5 text-xs underline text-neutral-700 dark:text-neutral-300 cursor-pointer border border-neutral-200/50 dark:border-neutral-800"
+                                            >
+                                              <Underline className="w-3.5 h-3.5" />
+                                              <span>{settings.language === 'id' ? 'Garis' : 'Underline'}</span>
+                                            </button>
+                                          </div>
+                                        )}
+
+                                        <div className="grid grid-cols-2 gap-1.5 p-1">
+                                          {[
+                                            { type: 'paragraph', icon: <Type className="w-4 h-4 text-neutral-500" />, label: settings.language === 'id' ? 'Paragraf' : 'Paragraph' },
+                                            { type: 'todo', icon: <CheckSquare className="w-4 h-4 text-blue-500" />, label: settings.language === 'id' ? 'Tugas' : 'To-Do' },
+                                            { type: 'h1', icon: <Heading1 className="w-4 h-4 text-neutral-800 font-bold" />, label: settings.language === 'id' ? 'Judul Utama' : 'Heading 1' },
+                                            { type: 'h2', icon: <Heading2 className="w-4 h-4 text-neutral-700 font-bold" />, label: settings.language === 'id' ? 'Subjudul' : 'Heading 2' },
+                                            { type: 'bullet', icon: <List className="w-4 h-4 text-amber-600" />, label: settings.language === 'id' ? 'Poin Bulatan' : 'Bullet List' },
+                                          ].map((item) => {
+                                            const activeBlock = journalBlocks.find(b => b.id === focusedJournalBlockId);
+                                            const isCurrent = activeBlock?.type === item.type;
+                                            return (
+                                              <button
+                                                key={item.type}
+                                                type="button"
+                                                onClick={() => {
+                                                  if (activeJournalToolbarPanel === 'type-changer') {
+                                                    handleJournalBlockChangeType(focusedJournalBlockId, item.type as any);
+                                                  } else {
+                                                    handleJournalBlockAddBelow(item.type as any, focusedJournalBlockId);
+                                                  }
+                                                  setActiveJournalToolbarPanel(null);
+                                                }}
+                                                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
+                                                  activeJournalToolbarPanel === 'type-changer' && isCurrent
+                                                    ? 'bg-[#337EA9]/10 text-[#337EA9] border-[#337EA9]/30 font-bold'
+                                                    : 'bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-100'
+                                                }`}
+                                              >
+                                                {item.icon}
+                                                <span className="truncate">{item.label}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      /* Icons row */
+                                      <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-1.5 px-2 bg-neutral-50 dark:bg-neutral-900 w-full rounded-lg [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveJournalToolbarPanel('type-changer')}
+                                          className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                          title={settings.language === 'id' ? 'Ubah Format Blok' : 'Convert Block Type'}
+                                        >
+                                          <Type className="w-5 h-5" />
+                                        </button>
+
+                                        <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJournalBlockIndentLeft(focusedJournalBlockId)}
+                                          className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <Outdent className="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJournalBlockIndentRight(focusedJournalBlockId)}
+                                          className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <Indent className="w-5 h-5" />
+                                        </button>
+
+                                        <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJournalBlockMoveUp(focusedJournalBlockId)}
+                                          disabled={journalBlocks.findIndex(b => b.id === focusedJournalBlockId) === 0}
+                                          className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <ChevronUp className="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJournalBlockMoveDown(focusedJournalBlockId)}
+                                          disabled={journalBlocks.findIndex(b => b.id === focusedJournalBlockId) === journalBlocks.length - 1}
+                                          className="p-2 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <ChevronDown className="w-5 h-5" />
+                                        </button>
+
+                                        <div className="h-5 w-[1px] bg-neutral-200 dark:bg-neutral-800 mx-1 shrink-0" />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => setActiveJournalToolbarPanel('add-line')}
+                                          className="p-2 rounded-lg text-[#337EA9] hover:bg-[#337EA9]/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <Plus className="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleJournalBlockDelete(focusedJournalBlockId)}
+                                          disabled={journalBlocks.length <= 1}
+                                          className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/25 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <Trash2 className="w-5 h-5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => setFocusedJournalBlockId(null)}
+                                          className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/25 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                                        >
+                                          <Check className="w-5 h-5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </motion.div>
-                          </>
+                          </div>
                         )}
                       </AnimatePresence>
                     </div>
@@ -1443,6 +2245,14 @@ export default function App() {
                 databaseRows={databaseRows}
                 onUpdateDatabaseRows={setDatabaseRows}
                 settings={settings}
+              />
+            )}
+
+            {currentPage.type === 'keep' && (
+              <KeepView
+                page={currentPage}
+                onUpdateKeepNotes={(keepNotes) => handleUpdatePageKeepNotes(currentPage.id, keepNotes)}
+                pages={pages}
               />
             )}
 

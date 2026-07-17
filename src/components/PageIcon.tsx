@@ -120,6 +120,20 @@ export default function PageIcon({ type, className = 'w-5 h-5', size }: PageIcon
         </svg>
       );
 
+    case 'keep':
+      // lightbulb / smart-notes icon from Material Symbols
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 -960 960 960"
+          fill="currentColor"
+          className={className}
+          style={style}
+        >
+          <path d="M480-80q-26 0-43-17t-17-43h120q0 26-17 43t-43 17Zm-160-120v-60h320v60H320Zm60-110q-54-37-87-95.5T260-519q0-91 64.5-155.5T480-739q91 0 155.5 64.5T700-519q0 75-33 133.5T580-290H380Zm20-60h160q30-22 47.5-54t17.5-69q0-60-40-100.5T480-659q-64 0-104 40.5t-40 100.5q0 37 17.5 69t47.5 54Z" />
+        </svg>
+      );
+
     case 'notes':
     default:
       // description / note outline icon from Google Material Symbols
@@ -156,6 +170,8 @@ export function getPageIconAccentColor(type: PageType): string {
       return 'text-[#10B981] bg-[#ECFDF5] border-[#10B981]/15';
     case 'telegram':
       return 'text-[#0284C7] bg-[#F0F9FF] border-[#0284C7]/15';
+    case 'keep':
+      return 'text-[#D97706] bg-[#FFFBEB] border-[#D97706]/15';
     case 'notes':
     default:
       return 'text-[#4F4F4F] bg-[#F1F1F0] border-[#4F4F4F]/15';

@@ -84,6 +84,7 @@ export default function Sidebar({
       case 'database': return '🗂️';
       case 'notes': return '📝';
       case 'blank': return '✨';
+      case 'keep': return '💡';
       default: return '📄';
     }
   };
@@ -399,43 +400,13 @@ export default function Sidebar({
                             </div>
                             <button
                               onClick={() => {
-                                addNewPageClick('tracker');
-                                setShowAddMenu(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
-                            >
-                              <PageIcon type="tracker" className="w-3.5 h-3.5 shrink-0 text-[#0D7A5E]" /> 
-                              <span className="capitalize">Daily Tracker</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                addNewPageClick('calendar');
-                                setShowAddMenu(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
-                            >
-                              <PageIcon type="calendar" className="w-3.5 h-3.5 shrink-0 text-[#2383E2]" /> 
-                              <span className="capitalize">Tracking Calendar</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                addNewPageClick('analytics');
-                                setShowAddMenu(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
-                            >
-                              <PageIcon type="analytics" className="w-3.5 h-3.5 shrink-0 text-[#6931E3]" /> 
-                              <span className="capitalize">Productivity Charts</span>
-                            </button>
-                            <button
-                              onClick={() => {
                                 addNewPageClick('database');
                                 setShowAddMenu(false);
                               }}
                               className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
                             >
                               <PageIcon type="database" className="w-3.5 h-3.5 shrink-0 text-[#D97706]" />
-                              <span className="capitalize">Todo</span>
+                              <span className="capitalize">{t('Todo', 'Todo')}</span>
                             </button>
                             <button
                               onClick={() => {
@@ -445,37 +416,17 @@ export default function Sidebar({
                               className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
                             >
                               <PageIcon type="notes" className="w-3.5 h-3.5 shrink-0 text-[#787774]" /> 
-                              <span className="capitalize">Brain Dump / Notes</span>
+                              <span className="capitalize">{t('New Page', 'New Page')}</span>
                             </button>
                             <button
                               onClick={() => {
-                                addNewPageClick('recap');
+                                addNewPageClick('keep');
                                 setShowAddMenu(false);
                               }}
                               className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
                             >
-                              <PageIcon type="recap" className="w-3.5 h-3.5 shrink-0 text-[#10B981]" /> 
-                              <span className="capitalize">Activity Recap</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                addNewPageClick('telegram');
-                                setShowAddMenu(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-[#F7F7F5] flex items-center gap-2 cursor-pointer transition-colors"
-                            >
-                              <PageIcon type="telegram" className="w-3.5 h-3.5 shrink-0 text-[#0284C7]" /> 
-                              <span className="capitalize">Telegram Bot Agent</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                addNewPageClick('blank');
-                                setShowAddMenu(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-[#FDF2F8] flex items-center gap-2 cursor-pointer border-t border-[#F1F1F0] pt-2 mt-1 transition-colors group"
-                            >
-                              <PageIcon type="blank" className="w-3.5 h-3.5 shrink-0 text-[#EC4899] group-hover:scale-110 transition-transform" /> 
-                              <span className="font-semibold text-[#EC4899]">{t('Halaman Kosong / Blank', 'Blank Page')}</span>
+                              <PageIcon type="keep" className="w-3.5 h-3.5 shrink-0 text-[#D97706]" /> 
+                              <span className="capitalize">{t('New Keep', 'New Keep')}</span>
                             </button>
                           </motion.div>
                         </>
@@ -590,6 +541,7 @@ function SidebarItem({
   onRequestDelete,
 }: SidebarItemProps) {
   const isSelected = page.id === currentPageId;
+  const isDeletable = page.type !== 'tracker' && page.type !== 'calendar' && page.type !== 'analytics' && page.type !== 'recap' && page.type !== 'telegram';
 
   return (
     <div
@@ -625,16 +577,18 @@ function SidebarItem({
           ★
         </button>
         {/* Delete button - with Shift-click support */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onRequestDelete(page.id, page.title, e.shiftKey);
-          }}
-          className="p-0.5 rounded text-neutral-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-          title="Delete Page (Hold Shift to delete instantly)"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        {isDeletable && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestDelete(page.id, page.title, e.shiftKey);
+            }}
+            className="p-0.5 rounded text-neutral-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+            title="Delete Page (Hold Shift to delete instantly)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </div>
   );
